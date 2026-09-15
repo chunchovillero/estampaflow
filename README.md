@@ -81,6 +81,7 @@ El marketplace y las cotizaciones aparecen en las fases siguientes descritas en 
 - Mensajería de propuestas preparada con actualización periódica.
 - Plantillas de WhatsApp configurables y accesos rápidos por pedido.
 - Correo preparado para SMTP mediante variables de entorno.
+- Panel React exclusivo para superadministradores con métricas globales, gestión de empresas y moderación de productos públicos.
 
 ## Arquitectura
 
@@ -175,5 +176,7 @@ Estas credenciales son exclusivamente locales. El comando no se ejecuta automát
 5. **Cotizaciones (completa):** coincidencias, propuestas, conversación y aceptación atómica.
 6. **Diseños y comunicación (completa):** archivos privados, aprobación, PDFs, WhatsApp configurable y correo preparado para SMTP.
 7. **Estabilización (completa):** planes y límites, endurecimiento de enlaces públicos, PWA, rendimiento, seeds integrales y documentación final.
+
+El panel de plataforma está disponible en `/plataforma` al ingresar con una cuenta superadministradora.
 
 Fuera del MVP: aplicación nativa, editor gráfico avanzado, facturación SII, pagos en línea, comisiones automáticas, API oficial de WhatsApp, despachos automáticos, WebSockets, IA, sistema completo de calificaciones y dominios personalizados funcionales.

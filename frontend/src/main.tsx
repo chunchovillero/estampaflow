@@ -14,6 +14,7 @@ import './quotes.css'
 import './navfix.css'
 import './designs.css'
 import './messages.css'
+import './admin.css'
 import App from './App'
 
 const queryClient = new QueryClient({defaultOptions:{queries:{retry:1,staleTime:30_000}}})

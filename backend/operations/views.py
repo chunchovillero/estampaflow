@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.contrib.auth import get_user_model
 from django.http import FileResponse,HttpResponse
 from django.db.models import Count, Sum, Q
 from django.utils import timezone
@@ -10,6 +11,43 @@ from businesses.permissions import HasActiveBusiness, get_membership
 from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteProposal,QuoteRequest
 from .serializers import CategorySerializer,CustomerSerializer,DesignApprovalSerializer,MarketplaceProductSerializer,MessageSerializer,OrderFileSerializer,OrderListSerializer,OrderSerializer,PaymentSerializer,ProductSerializer,PublicOrderRequestSerializer,PublicProductSerializer,PublicProposalSerializer,QuoteProposalSerializer,QuoteRequestBusinessSerializer,QuoteRequestCreateSerializer
 from .services import enforce_plan_limit,next_order_number,recalculate_order
+
+User = get_user_model()
+
+class PlatformDashboardView(APIView):
+    permission_classes=[permissions.IsAdminUser]
+    def get(self,request):
+        return response.Response({"businesses":Business.objects.count(),"active_businesses":Business.objects.filter(status="active").count(),"verified_businesses":Business.objects.filter(is_verified=True).count(),"users":User.objects.count(),"public_products":Product.objects.filter(is_public=True).count(),"pending_products":Product.objects.filter(is_public=True,moderation_status="pending").count(),"quote_requests":QuoteRequest.objects.count(),"proposals":QuoteProposal.objects.count(),"orders":Order.objects.count(),"accepted_quotes":QuoteRequest.objects.filter(status="accepted").count()})
+
+class PlatformBusinessView(APIView):
+    permission_classes=[permissions.IsAdminUser]
+    def get(self,request):
+        queryset=Business.objects.annotate(users_count=Count("memberships",filter=Q(memberships__is_active=True),distinct=True),products_count=Count("product",distinct=True)).order_by("-created_at")
+        return response.Response([{"id":b.id,"name":b.name,"slug":b.slug,"email":b.email,"region":b.region,"status":b.status,"is_verified":b.is_verified,"is_public":b.is_public,"users_count":b.users_count,"products_count":b.products_count,"created_at":b.created_at} for b in queryset[:100]])
+    def patch(self,request,pk):
+        business=Business.objects.filter(pk=pk).first()
+        if not business:return response.Response(status=404)
+        allowed_status={choice for choice,_ in Business.Status.choices}
+        if "status" in request.data:
+            if request.data["status"] not in allowed_status:return response.Response({"error":{"status":400,"details":"Estado no válido."}},status=400)
+            business.status=request.data["status"]
+        if "is_verified" in request.data:business.is_verified=bool(request.data["is_verified"])
+        if "is_public" in request.data:business.is_public=bool(request.data["is_public"])
+        business.save(update_fields=["status","is_verified","is_public","updated_at"])
+        return response.Response({"id":business.id,"status":business.status,"is_verified":business.is_verified,"is_public":business.is_public})
+
+class PlatformProductView(APIView):
+    permission_classes=[permissions.IsAdminUser]
+    def get(self,request):
+        queryset=Product.objects.filter(is_public=True).select_related("business","category").order_by("moderation_status","-created_at")
+        return response.Response([{"id":p.id,"name":p.name,"business":p.business.name,"business_slug":p.business.slug,"category":p.category.name if p.category else "","sale_price":p.sale_price,"moderation_status":p.moderation_status,"created_at":p.created_at} for p in queryset[:100]])
+    def patch(self,request,pk):
+        product=Product.objects.filter(pk=pk,is_public=True).first()
+        if not product:return response.Response(status=404)
+        value=request.data.get("moderation_status");allowed={choice for choice,_ in Product.ModerationStatus.choices}
+        if value not in allowed:return response.Response({"error":{"status":400,"details":"Estado de moderación no válido."}},status=400)
+        product.moderation_status=value;product.save(update_fields=["moderation_status","updated_at"])
+        return response.Response({"id":product.id,"moderation_status":product.moderation_status})
 
 class TenantViewSet(viewsets.ModelViewSet):
     permission_classes=[HasActiveBusiness]
