@@ -8,9 +8,9 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from businesses.models import Business
 from businesses.permissions import HasActiveBusiness, get_membership
-from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteProposal,QuoteRequest
-from .serializers import CategorySerializer,CustomerSerializer,DesignApprovalSerializer,MarketplaceProductSerializer,MessageSerializer,OrderFileSerializer,OrderListSerializer,OrderSerializer,PaymentSerializer,ProductSerializer,PublicOrderRequestSerializer,PublicProductSerializer,PublicProposalSerializer,QuoteProposalSerializer,QuoteRequestBusinessSerializer,QuoteRequestCreateSerializer
-from .services import enforce_plan_limit,next_order_number,recalculate_order,record_audit
+from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteProposal,QuoteRequest
+from .serializers import CategorySerializer,CustomerSerializer,DesignApprovalSerializer,MarketplaceProductSerializer,MessageSerializer,NotificationSerializer,OrderFileSerializer,OrderListSerializer,OrderSerializer,PaymentSerializer,ProductSerializer,PublicOrderRequestSerializer,PublicProductSerializer,PublicProposalSerializer,QuoteProposalSerializer,QuoteRequestBusinessSerializer,QuoteRequestCreateSerializer
+from .services import enforce_plan_limit,next_order_number,notify_business,recalculate_order,record_audit
 
 User = get_user_model()
 
@@ -56,6 +56,19 @@ class TenantViewSet(viewsets.ModelViewSet):
     permission_classes=[HasActiveBusiness]
     def business(self): return get_membership(self.request.user).business
     def perform_create(self, serializer): serializer.save(business=self.business())
+
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes=[HasActiveBusiness];serializer_class=NotificationSerializer
+    def get_queryset(self):return Notification.objects.filter(recipient=self.request.user,business=get_membership(self.request.user).business)
+    @decorators.action(detail=True,methods=["post"])
+    def read(self,request,pk=None):
+        item=self.get_object()
+        if not item.read_at:item.read_at=timezone.now();item.save(update_fields=["read_at"])
+        return response.Response(NotificationSerializer(item).data)
+    @decorators.action(detail=False,methods=["post"])
+    def read_all(self,request):
+        self.get_queryset().filter(read_at__isnull=True).update(read_at=timezone.now())
+        return response.Response(status=204)
 
 class CustomerViewSet(TenantViewSet):
     serializer_class=CustomerSerializer
@@ -212,6 +225,7 @@ class AcceptProposalView(APIView):
         proposal.status="accepted";proposal.save(update_fields=["status"]);quote.proposals.exclude(id=proposal.id).filter(status__in=("sent","viewed","draft")).update(status="rejected")
         quote.accepted_proposal=proposal;quote.status="accepted";quote.save(update_fields=["accepted_proposal","status"])
         record_audit("quote.proposal_accepted",order,business=business,request=request,metadata={"proposal":str(proposal.public_id),"quote":str(quote.public_id)})
+        notify_business(business,"quote.accepted","¡Propuesta aceptada!",f"Se creó el pedido {order.display_number} desde una cotización.",f"/app/pedidos")
         return response.Response({"detail":"Propuesta aceptada y pedido creado.","order_public_id":order.public_id,"display_number":order.display_number})
 
 ALLOWED_FILES={".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".pdf":"application/pdf"}
@@ -271,6 +285,7 @@ class PublicApprovalView(APIView):
         elif request.data.get("action")=="changes" and comment:DesignChangeRequest.objects.create(approval=approval,requested_by_name=name,comment=comment,ip_address=ip);old=approval.order.status;approval.order.status="changes_requested";approval.order.save(update_fields=["status"]);OrderStatusHistory.objects.create(order=approval.order,from_status=old,to_status="changes_requested",changed_by=approval.created_by,comment="Cliente solicitó cambios")
         else:return response.Response({"error":{"status":400,"details":"Acción o comentario no válido."}},status=400)
         record_audit("design.approved" if request.data.get("action")=="approve" else "design.changes_requested",approval,business=approval.order.business,request=request,metadata={"order":approval.order.display_number,"name":name})
+        notify_business(approval.order.business,"design.approved" if request.data.get("action")=="approve" else "design.changes",("Diseño aprobado" if request.data.get("action")=="approve" else "Cambios solicitados"),f"Respuesta recibida para {approval.order.display_number}.","/app/disenos")
         return response.Response({"detail":"Respuesta registrada correctamente."})
     def file(self,request,token,file_id):pass
 

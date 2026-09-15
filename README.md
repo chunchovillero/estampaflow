@@ -83,6 +83,7 @@ El marketplace y las cotizaciones aparecen en las fases siguientes descritas en 
 - Correo preparado para SMTP mediante variables de entorno.
 - Panel React exclusivo para superadministradores con métricas globales, gestión de empresas y moderación de productos públicos.
 - Auditoría persistente de pedidos, pagos, archivos, diseños, propuestas y acciones de moderación, visible como actividad reciente en el panel de plataforma.
+- Notificaciones internas por usuario y empresa para pedidos públicos, cotizaciones compatibles, propuestas aceptadas y respuestas de diseño.
 
 ## Arquitectura
 

@@ -3,7 +3,7 @@ from django.db import transaction
 from django.db.models import Sum
 from businesses.models import BusinessSetting
 from businesses.models import Business
-from .models import AuditLog,Product,QuoteMatch
+from .models import AuditLog,Notification,Product,QuoteMatch
 from rest_framework.exceptions import ValidationError
 
 def next_order_number(business):
@@ -39,7 +39,9 @@ def match_quote_request(quote,max_matches=5):
         if business.weekly_capacity>=quote.quantity:score+=10;reasons.append("Capacidad disponible")
         if score>=50:ranked.append((score,business,reasons))
     ranked.sort(key=lambda item:(-item[0],item[1].id))
-    return [QuoteMatch.objects.create(request=quote,business=business,score=score,reasons=reasons) for score,business,reasons in ranked[:max_matches]]
+    matches=[QuoteMatch.objects.create(request=quote,business=business,score=score,reasons=reasons) for score,business,reasons in ranked[:max_matches]]
+    for match in matches:notify_business(match.business,"quote.available","Nueva solicitud compatible",quote.title,"/app/cotizaciones")
+    return matches
 
 def enforce_plan_limit(business,key,current):
     try:limit=business.subscription.limit(key)
@@ -50,3 +52,7 @@ def record_audit(action,entity,business=None,actor=None,request=None,metadata=No
     if business is None:business=getattr(entity,"business",None)
     ip=request.META.get("REMOTE_ADDR") if request else None
     return AuditLog.objects.create(business=business,actor=actor,action=action,entity_type=entity.__class__.__name__,entity_id=str(getattr(entity,"pk","")),metadata=metadata or {},ip_address=ip)
+
+def notify_business(business,kind,title,body="",url=""):
+    recipients=business.memberships.filter(is_active=True).select_related("user")
+    return [Notification.objects.create(business=business,recipient=membership.user,kind=kind,title=title,body=body,url=url) for membership in recipients if membership.user.is_active]

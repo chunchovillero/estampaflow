@@ -3,8 +3,16 @@ from django.utils.text import slugify
 from rest_framework import serializers
 from django.utils import timezone
 from businesses.permissions import get_membership
-from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,Message,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductVariant,QuoteProposal,QuoteRequest
-from .services import enforce_plan_limit,match_quote_request,next_order_number,recalculate_order,record_audit
+from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductVariant,QuoteProposal,QuoteRequest
+from .services import enforce_plan_limit,match_quote_request,next_order_number,notify_business,recalculate_order,record_audit
+
+class NotificationSerializer(serializers.ModelSerializer):
+    is_read=serializers.SerializerMethodField()
+    class Meta:
+        model=Notification
+        fields=("id","kind","title","body","url","is_read","read_at","created_at")
+        read_only_fields=fields
+    def get_is_read(self,obj):return bool(obj.read_at)
 
 class CustomerSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
@@ -208,6 +216,7 @@ class PublicOrderRequestSerializer(serializers.Serializer):
         OrderItem.objects.create(business=business,order=order,product=product,variant=variant,description=product.name,quantity=quantity,unit_cost=product.internal_cost,unit_price=unit_price,customizations=customizations,notes=notes)
         recalculate_order(order)
         record_audit("order.public_requested",order,metadata={"number":order.display_number})
+        notify_business(business,"order.public","Nuevo pedido desde tu tienda",f"{customer.full_name} solicitó {quantity} × {product.name}","/app/pedidos")
         return order
 
 class QuoteRequestCreateSerializer(serializers.ModelSerializer):

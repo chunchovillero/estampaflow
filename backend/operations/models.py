@@ -328,3 +328,14 @@ class AuditLog(models.Model):
     ip_address=models.GenericIPAddressField(null=True,blank=True)
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta: ordering=("-created_at",)
+
+class Notification(models.Model):
+    business=models.ForeignKey(Business,on_delete=models.PROTECT,related_name="notifications")
+    recipient=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name="notifications")
+    kind=models.CharField(max_length=40)
+    title=models.CharField(max_length=160)
+    body=models.CharField(max_length=300,blank=True)
+    url=models.CharField(max_length=240,blank=True)
+    read_at=models.DateTimeField(null=True,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=("-created_at",)
