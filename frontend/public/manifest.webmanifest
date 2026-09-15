@@ -1,0 +1,10 @@
+{
+  "name": "EstampaFlow",
+  "short_name": "EstampaFlow",
+  "description": "Tus pedidos personalizados, bajo control.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#5b4cf0",
+  "lang": "es-CL"
+}

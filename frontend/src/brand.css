@@ -1,0 +1,12 @@
+.brand{
+  width:220px;
+  height:64px;
+  flex:0 0 auto;
+  background:url('/brand/estampaflow-logo.png') center/contain no-repeat;
+  font-size:0;
+  mix-blend-mode:multiply;
+}
+.brand > *{display:none}
+.sidebar .brand{width:205px;height:58px;padding:0!important;margin:0 auto 1.2rem}
+.auth-page > .brand{width:250px;height:76px;margin:0 auto 1.4rem}
+@media(max-width:600px){.landing nav .brand{width:155px;height:50px}.auth-page > .brand{width:220px;height:68px}}

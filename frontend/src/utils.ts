@@ -1,0 +1,4 @@
+export const clp=(value:string|number)=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(Number(value)||0)
+export const chileDate=(value?:string|null)=>value?new Intl.DateTimeFormat('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(`${value}T12:00:00`)):'Sin fecha'
+export const statusLabel:Record<string,string>={new:'Nuevo',waiting_design:'Esperando diseño',waiting_approval:'Esperando aprobación',changes_requested:'Cambios solicitados',approved:'Aprobado',production:'En producción',ready:'Listo',delivered:'Entregado',cancelled:'Cancelado'}
+export const statusClass:Record<string,string>={new:'info',waiting_design:'secondary',waiting_approval:'warning',changes_requested:'danger',approved:'primary',production:'primary',ready:'success',delivered:'dark',cancelled:'secondary'}
