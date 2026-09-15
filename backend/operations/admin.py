@@ -1,3 +1,3 @@
 from django.contrib import admin
-from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductVariant,QuoteMatch,QuoteProposal,QuoteRequest
-admin.site.register((Customer,ProductCategory,Product,ProductVariant,Order,OrderItem,OrderStatusHistory,Payment,FeaturedBusiness,FeaturedProduct,QuoteRequest,QuoteMatch,QuoteProposal,Conversation,Message,OrderFile,DesignApproval,DesignChangeRequest))
+from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductVariant,QuoteMatch,QuoteProposal,QuoteRequest
+admin.site.register((Customer,ProductCategory,Product,ProductVariant,Order,OrderItem,OrderStatusHistory,Payment,FeaturedBusiness,FeaturedProduct,QuoteRequest,QuoteMatch,QuoteProposal,Conversation,Message,OrderFile,DesignApproval,DesignChangeRequest,AuditLog))

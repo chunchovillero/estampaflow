@@ -2,7 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from businesses.models import Business, BusinessMembership
-from operations.models import Product, ProductCategory
+from operations.models import AuditLog, Product, ProductCategory
 
 pytestmark=pytest.mark.django_db
 User=get_user_model()
@@ -30,5 +30,8 @@ def test_superadmin_can_manage_business_and_moderate_product():
     business.refresh_from_db();product.refresh_from_db()
     assert company.status_code==200 and business.status=="active" and business.is_verified
     assert moderation.status_code==200 and product.moderation_status=="approved"
+    assert AuditLog.objects.filter(action="platform.business_updated",business=business,actor=admin).exists()
+    assert AuditLog.objects.filter(action="platform.product_moderated",business=business,actor=admin).exists()
+    assert len(client.get("/api/v1/platform/dashboard/").data["recent_activity"])==2
     marketplace=APIClient().get("/api/v1/public/marketplace/")
     assert any(item["id"]==product.id for item in marketplace.data["products"])

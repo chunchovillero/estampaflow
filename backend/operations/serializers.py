@@ -4,7 +4,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from businesses.permissions import get_membership
 from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,Message,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductVariant,QuoteProposal,QuoteRequest
-from .services import enforce_plan_limit,match_quote_request,next_order_number,recalculate_order
+from .services import enforce_plan_limit,match_quote_request,next_order_number,recalculate_order,record_audit
 
 class CustomerSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
@@ -46,6 +46,7 @@ class ProductSerializer(serializers.ModelSerializer):
         while Product.objects.filter(business=business, slug=slug).exists(): slug=f"{base}-{suffix}"; suffix += 1
         product = Product.objects.create(business=business, slug=slug, **validated)
         for variant in variants: ProductVariant.objects.create(business=business, product=product, **variant)
+        record_audit("product.created",product,actor=self.context["request"].user,request=self.context["request"])
         return product
     @transaction.atomic
     def update(self, instance, validated):
@@ -56,6 +57,7 @@ class ProductSerializer(serializers.ModelSerializer):
         if variants is not None:
             instance.variants.all().delete()
             for variant in variants: ProductVariant.objects.create(business=instance.business, product=instance, **variant)
+        record_audit("product.updated",instance,actor=self.context["request"].user,request=self.context["request"])
         return instance
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -87,6 +89,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         request = self.context["request"]; business = get_membership(request.user).business
         payment = Payment.objects.create(business=business, registered_by=request.user, **validated)
         recalculate_order(payment.order)
+        record_audit("payment.recorded",payment,actor=request.user,request=request,metadata={"amount":str(payment.amount),"order":payment.order.display_number})
         return payment
 
 class StatusHistorySerializer(serializers.ModelSerializer):
@@ -125,6 +128,7 @@ class OrderSerializer(serializers.ModelSerializer):
         order=Order.objects.create(business=business,number=next_order_number(business),**validated)
         for item in items: OrderItem.objects.create(business=business,order=order,**item)
         OrderStatusHistory.objects.create(order=order,to_status=order.status,changed_by=request.user,comment="Pedido creado")
+        record_audit("order.created",order,actor=request.user,request=request,metadata={"number":order.display_number})
         return recalculate_order(order)
     @transaction.atomic
     def update(self, instance, validated):
@@ -135,6 +139,7 @@ class OrderSerializer(serializers.ModelSerializer):
             for item in items: OrderItem.objects.create(business=instance.business,order=instance,**item)
         if old_status != instance.status:
             OrderStatusHistory.objects.create(order=instance,from_status=old_status,to_status=instance.status,changed_by=self.context["request"].user)
+            record_audit("order.status_changed",instance,actor=self.context["request"].user,request=self.context["request"],metadata={"from":old_status,"to":instance.status})
         return recalculate_order(instance)
 
 class OrderListSerializer(serializers.ModelSerializer):
@@ -202,6 +207,7 @@ class PublicOrderRequestSerializer(serializers.Serializer):
         order=Order.objects.create(business=business,number=next_order_number(business),customer=customer,origin=Order.Origin.PUBLIC_STORE,due_date=due_date,customer_instructions=notes)
         OrderItem.objects.create(business=business,order=order,product=product,variant=variant,description=product.name,quantity=quantity,unit_cost=product.internal_cost,unit_price=unit_price,customizations=customizations,notes=notes)
         recalculate_order(order)
+        record_audit("order.public_requested",order,metadata={"number":order.display_number})
         return order
 
 class QuoteRequestCreateSerializer(serializers.ModelSerializer):
@@ -241,6 +247,7 @@ class QuoteProposalSerializer(serializers.ModelSerializer):
         proposal=QuoteProposal.objects.create(business=business,created_by=request.user,**validated)
         Conversation.objects.create(proposal=proposal)
         if proposal.status=="sent" and proposal.request.status=="open":proposal.request.status="proposals";proposal.request.save(update_fields=["status"])
+        record_audit("quote.proposal_sent",proposal,business=business,actor=request.user,request=request,metadata={"total":str(proposal.total_price)})
         return proposal
 
 class MessageSerializer(serializers.ModelSerializer):

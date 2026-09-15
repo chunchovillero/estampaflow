@@ -3,7 +3,7 @@ from django.db import transaction
 from django.db.models import Sum
 from businesses.models import BusinessSetting
 from businesses.models import Business
-from .models import Product,QuoteMatch
+from .models import AuditLog,Product,QuoteMatch
 from rest_framework.exceptions import ValidationError
 
 def next_order_number(business):
@@ -45,3 +45,8 @@ def enforce_plan_limit(business,key,current):
     try:limit=business.subscription.limit(key)
     except Exception:return
     if limit is not None and current>=int(limit):raise ValidationError({"plan":f"Alcanzaste el límite de {key} de tu plan."})
+
+def record_audit(action,entity,business=None,actor=None,request=None,metadata=None):
+    if business is None:business=getattr(entity,"business",None)
+    ip=request.META.get("REMOTE_ADDR") if request else None
+    return AuditLog.objects.create(business=business,actor=actor,action=action,entity_type=entity.__class__.__name__,entity_id=str(getattr(entity,"pk","")),metadata=metadata or {},ip_address=ip)

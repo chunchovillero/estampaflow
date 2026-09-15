@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APIClient
 from businesses.models import Business,BusinessMembership,Plan,Subscription
-from operations.models import Customer,Order,Payment,Product,ProductCategory
+from operations.models import AuditLog,Customer,Order,Payment,Product,ProductCategory
 
 pytestmark=pytest.mark.django_db
 User=get_user_model()
@@ -59,6 +59,7 @@ def test_payment_updates_paid_amount_balance_and_status():
     response=client.post("/api/v1/payments/",{"order":order_id,"amount":"5000","paid_at":timezone.now().isoformat(),"method":"transfer"},format="json")
     order=Order.objects.get(id=order_id)
     assert response.status_code==201 and order.total_paid==5000 and order.balance==16000 and order.payment_status=="partial"
+    assert AuditLog.objects.filter(action="payment.recorded",business=business,entity_id=str(response.data["id"])).exists()
 
 def test_payment_cannot_exceed_pending_balance():
     business,_,client=tenant("Aurora","owner@aurora.cl");_,product,customer=catalog(business)

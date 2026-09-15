@@ -8,16 +8,17 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from businesses.models import Business
 from businesses.permissions import HasActiveBusiness, get_membership
-from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteProposal,QuoteRequest
+from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteProposal,QuoteRequest
 from .serializers import CategorySerializer,CustomerSerializer,DesignApprovalSerializer,MarketplaceProductSerializer,MessageSerializer,OrderFileSerializer,OrderListSerializer,OrderSerializer,PaymentSerializer,ProductSerializer,PublicOrderRequestSerializer,PublicProductSerializer,PublicProposalSerializer,QuoteProposalSerializer,QuoteRequestBusinessSerializer,QuoteRequestCreateSerializer
-from .services import enforce_plan_limit,next_order_number,recalculate_order
+from .services import enforce_plan_limit,next_order_number,recalculate_order,record_audit
 
 User = get_user_model()
 
 class PlatformDashboardView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):
-        return response.Response({"businesses":Business.objects.count(),"active_businesses":Business.objects.filter(status="active").count(),"verified_businesses":Business.objects.filter(is_verified=True).count(),"users":User.objects.count(),"public_products":Product.objects.filter(is_public=True).count(),"pending_products":Product.objects.filter(is_public=True,moderation_status="pending").count(),"quote_requests":QuoteRequest.objects.count(),"proposals":QuoteProposal.objects.count(),"orders":Order.objects.count(),"accepted_quotes":QuoteRequest.objects.filter(status="accepted").count()})
+        recent=AuditLog.objects.select_related("business","actor")[:20]
+        return response.Response({"businesses":Business.objects.count(),"active_businesses":Business.objects.filter(status="active").count(),"verified_businesses":Business.objects.filter(is_verified=True).count(),"users":User.objects.count(),"public_products":Product.objects.filter(is_public=True).count(),"pending_products":Product.objects.filter(is_public=True,moderation_status="pending").count(),"quote_requests":QuoteRequest.objects.count(),"proposals":QuoteProposal.objects.count(),"orders":Order.objects.count(),"accepted_quotes":QuoteRequest.objects.filter(status="accepted").count(),"recent_activity":[{"id":log.id,"action":log.action,"entity_type":log.entity_type,"entity_id":log.entity_id,"business":log.business.name if log.business else "Plataforma","actor":log.actor.email if log.actor else "Cliente público","metadata":log.metadata,"created_at":log.created_at} for log in recent]})
 
 class PlatformBusinessView(APIView):
     permission_classes=[permissions.IsAdminUser]
@@ -34,6 +35,7 @@ class PlatformBusinessView(APIView):
         if "is_verified" in request.data:business.is_verified=bool(request.data["is_verified"])
         if "is_public" in request.data:business.is_public=bool(request.data["is_public"])
         business.save(update_fields=["status","is_verified","is_public","updated_at"])
+        record_audit("platform.business_updated",business,business=business,actor=request.user,request=request,metadata={"status":business.status,"verified":business.is_verified,"public":business.is_public})
         return response.Response({"id":business.id,"status":business.status,"is_verified":business.is_verified,"is_public":business.is_public})
 
 class PlatformProductView(APIView):
@@ -47,6 +49,7 @@ class PlatformProductView(APIView):
         value=request.data.get("moderation_status");allowed={choice for choice,_ in Product.ModerationStatus.choices}
         if value not in allowed:return response.Response({"error":{"status":400,"details":"Estado de moderación no válido."}},status=400)
         product.moderation_status=value;product.save(update_fields=["moderation_status","updated_at"])
+        record_audit("platform.product_moderated",product,actor=request.user,request=request,metadata={"status":value})
         return response.Response({"id":product.id,"moderation_status":product.moderation_status})
 
 class TenantViewSet(viewsets.ModelViewSet):
@@ -208,6 +211,7 @@ class AcceptProposalView(APIView):
         recalculate_order(order);OrderStatusHistory.objects.create(order=order,to_status="new",changed_by=proposal.created_by,comment="Creado desde cotización aceptada")
         proposal.status="accepted";proposal.save(update_fields=["status"]);quote.proposals.exclude(id=proposal.id).filter(status__in=("sent","viewed","draft")).update(status="rejected")
         quote.accepted_proposal=proposal;quote.status="accepted";quote.save(update_fields=["accepted_proposal","status"])
+        record_audit("quote.proposal_accepted",order,business=business,request=request,metadata={"proposal":str(proposal.public_id),"quote":str(quote.public_id)})
         return response.Response({"detail":"Propuesta aceptada y pedido creado.","order_public_id":order.public_id,"display_number":order.display_number})
 
 ALLOWED_FILES={".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".pdf":"application/pdf"}
@@ -227,6 +231,7 @@ class OrderFileViewSet(viewsets.ReadOnlyModelViewSet):
         item=None
         if request.data.get("item"):item=OrderItem.objects.filter(id=request.data["item"],order=order,business=business).first()
         obj=OrderFile.objects.create(business=business,order=order,item=item,file=upload,kind=request.data.get("kind","reference"),original_name=os.path.basename(upload.name),mime_type=expected,size=upload.size,uploaded_by=request.user)
+        record_audit("order.file_uploaded",obj,actor=request.user,request=request,metadata={"kind":obj.kind,"order":order.display_number})
         return response.Response(OrderFileSerializer(obj).data,status=201)
     @decorators.action(detail=True,methods=["get"])
     def download(self,request,pk=None):
@@ -240,10 +245,11 @@ class DesignApprovalViewSet(viewsets.ReadOnlyModelViewSet):
         if not order:return response.Response(status=404)
         approval=DesignApproval.objects.create(order=order,expires_at=request.data.get("expires_at") or None,created_by=request.user)
         if order.status!="waiting_approval":old=order.status;order.status="waiting_approval";order.save(update_fields=["status"]);OrderStatusHistory.objects.create(order=order,from_status=old,to_status=order.status,changed_by=request.user)
+        record_audit("design.approval_link_created",approval,business=order.business,actor=request.user,request=request,metadata={"order":order.display_number})
         return response.Response(DesignApprovalSerializer(approval).data,status=201)
     @decorators.action(detail=True,methods=["post"])
     def revoke(self,request,pk=None):
-        approval=self.get_object();approval.revoked_at=timezone.now();approval.save(update_fields=["revoked_at"]);return response.Response(DesignApprovalSerializer(approval).data)
+        approval=self.get_object();approval.revoked_at=timezone.now();approval.save(update_fields=["revoked_at"]);record_audit("design.approval_link_revoked",approval,business=approval.order.business,actor=request.user,request=request);return response.Response(DesignApprovalSerializer(approval).data)
 
 class PublicApprovalView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
@@ -264,6 +270,7 @@ class PublicApprovalView(APIView):
         if request.data.get("action")=="approve":approval.approved_at=timezone.now();approval.approved_by_name=name;approval.comment=comment;approval.ip_address=ip;approval.save(update_fields=["approved_at","approved_by_name","comment","ip_address"]);old=approval.order.status;approval.order.status="approved";approval.order.save(update_fields=["status"]);OrderStatusHistory.objects.create(order=approval.order,from_status=old,to_status="approved",changed_by=approval.created_by,comment="Diseño aprobado por cliente")
         elif request.data.get("action")=="changes" and comment:DesignChangeRequest.objects.create(approval=approval,requested_by_name=name,comment=comment,ip_address=ip);old=approval.order.status;approval.order.status="changes_requested";approval.order.save(update_fields=["status"]);OrderStatusHistory.objects.create(order=approval.order,from_status=old,to_status="changes_requested",changed_by=approval.created_by,comment="Cliente solicitó cambios")
         else:return response.Response({"error":{"status":400,"details":"Acción o comentario no válido."}},status=400)
+        record_audit("design.approved" if request.data.get("action")=="approve" else "design.changes_requested",approval,business=approval.order.business,request=request,metadata={"order":approval.order.display_number,"name":name})
         return response.Response({"detail":"Respuesta registrada correctamente."})
     def file(self,request,token,file_id):pass
 
