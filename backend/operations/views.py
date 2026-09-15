@@ -49,8 +49,33 @@ class PlatformProductView(APIView):
         value=request.data.get("moderation_status");allowed={choice for choice,_ in Product.ModerationStatus.choices}
         if value not in allowed:return response.Response({"error":{"status":400,"details":"Estado de moderación no válido."}},status=400)
         product.moderation_status=value;product.save(update_fields=["moderation_status","updated_at"])
+        if value!="approved":FeaturedProduct.objects.filter(product=product,is_active=True).update(is_active=False)
         record_audit("platform.product_moderated",product,actor=request.user,request=request,metadata={"status":value})
         return response.Response({"id":product.id,"moderation_status":product.moderation_status})
+
+class PlatformFeaturedView(APIView):
+    permission_classes=[permissions.IsAdminUser]
+    def get(self,request):
+        business_items=FeaturedBusiness.objects.filter(is_active=True).select_related("business")
+        product_items=FeaturedProduct.objects.filter(is_active=True).select_related("product__business")
+        return response.Response({"businesses":[{"id":item.id,"target_id":item.business_id,"name":item.business.name,"position":item.position,"starts_at":item.starts_at,"ends_at":item.ends_at,"reason":item.reason,"is_paid":item.is_paid} for item in business_items],"products":[{"id":item.id,"target_id":item.product_id,"name":item.product.name,"business":item.product.business.name,"position":item.position,"starts_at":item.starts_at,"ends_at":item.ends_at,"reason":item.reason,"is_paid":item.is_paid} for item in product_items]})
+    @transaction.atomic
+    def post(self,request):
+        kind=request.data.get("kind");target_id=request.data.get("target_id")
+        model,target_field,target_model=(FeaturedBusiness,"business",Business) if kind=="business" else (FeaturedProduct,"product",Product) if kind=="product" else (None,None,None)
+        if not model:return response.Response({"error":{"status":400,"details":"Tipo de destacado no válido."}},status=400)
+        target=target_model.objects.filter(pk=target_id).first()
+        if not target:return response.Response(status=404)
+        if kind=="product" and (not target.is_public or target.moderation_status!="approved"):return response.Response({"error":{"status":400,"details":"Solo puedes destacar productos públicos aprobados."}},status=400)
+        current=model.objects.filter(**{target_field:target},is_active=True).first()
+        if current:
+            current.is_active=False;current.save(update_fields=["is_active"]);active=False;placement=current
+        else:
+            defaults={"position":request.data.get("position",0),"reason":request.data.get("reason",""),"is_paid":bool(request.data.get("is_paid",False)),"starts_at":request.data.get("starts_at") or None,"ends_at":request.data.get("ends_at") or None,"is_active":True}
+            placement=model.objects.create(**{target_field:target},**defaults);active=True
+        business=target if kind=="business" else target.business
+        record_audit("platform.featured_toggled",placement,business=business,actor=request.user,request=request,metadata={"kind":kind,"target_id":target.pk,"active":active})
+        return response.Response({"active":active,"placement_id":placement.id})
 
 class TenantViewSet(viewsets.ModelViewSet):
     permission_classes=[HasActiveBusiness]
