@@ -2,10 +2,11 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.test import APIClient
 from businesses.models import Business,BusinessMembership
-from operations.models import Order,Product,ProductCategory,QuoteFile,QuoteProposal,QuoteRequest
+from operations.models import Conversation,Message,Order,Product,ProductCategory,QuoteFile,QuoteProposal,QuoteRequest
 
 pytestmark=pytest.mark.django_db
 
@@ -73,3 +74,22 @@ def test_quote_files_require_token_and_only_reach_matched_businesses():
     assert response.status_code==201 and auth(user).get("/api/v1/quote-files/").data[0]["id"]==item.id
     assert auth(outsider).get(f"/api/v1/quote-files/{item.id}/").status_code==404
     assert APIClient().get(f"{endpoint}{item.id}/?token={quote.access_token}").status_code==200
+
+def test_conversation_marks_messages_read_and_rejects_foreign_attachments():
+    first,first_user=company("Aurora","chat-a@test.cl");second,second_user=company("Tinta","chat-b@test.cl")
+    created=APIClient().post("/api/v1/public/quotes/",quote_payload(),format="json");quote=QuoteRequest.objects.get(public_id=created.data["public_id"])
+    first_proposal=QuoteProposal.objects.create(request=quote,business=first,total_price=240000,unit_price=12000,production_days=7,valid_until=timezone.localdate()+timedelta(days=7),created_by=first_user,status="sent")
+    second_proposal=QuoteProposal.objects.create(request=quote,business=second,total_price=220000,unit_price=11000,production_days=8,valid_until=timezone.localdate()+timedelta(days=7),created_by=second_user,status="sent")
+    first_chat=Conversation.objects.create(proposal=first_proposal);Conversation.objects.create(proposal=second_proposal)
+    client_message=Message.objects.create(conversation=first_chat,sender_type="client",body="¿Incluye despacho?")
+    foreign_file=QuoteFile.objects.create(request=quote,proposal=second_proposal,business=second,file=SimpleUploadedFile("otra.pdf",b"%PDF-1.4 demo",content_type="application/pdf"),original_name="otra.pdf",mime_type="application/pdf",size=13,sender_type="business",uploaded_by=second_user)
+    endpoint=f"/api/v1/quote-proposals/{first_proposal.id}/messages/"
+    assert auth(first_user).post(endpoint,{"body":"Respuesta","file_id":foreign_file.id},format="json").status_code==400
+    messages=auth(first_user).get(endpoint)
+    client_message.refresh_from_db()
+    assert messages.status_code==200 and client_message.is_read is True
+    business_message=Message.objects.create(conversation=first_chat,sender_type="business",sender_user=first_user,body="Sí, está incluido")
+    cache.clear()
+    APIClient().get(f"/api/v1/public/quotes/{quote.public_id}/?token={quote.access_token}")
+    business_message.refresh_from_db()
+    assert business_message.is_read is True

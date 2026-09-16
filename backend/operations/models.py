@@ -274,6 +274,7 @@ class Message(models.Model):
     sender_type=models.CharField(max_length=10,choices=[("client","Cliente"),("business","Empresa")])
     sender_user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,null=True,blank=True)
     body=models.TextField()
+    file=models.ForeignKey("QuoteFile",on_delete=models.PROTECT,related_name="messages",null=True,blank=True)
     is_read=models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta: ordering=("created_at",)

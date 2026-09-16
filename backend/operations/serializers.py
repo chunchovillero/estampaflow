@@ -244,6 +244,7 @@ class QuoteRequestBusinessSerializer(serializers.ModelSerializer):
 class QuoteProposalSerializer(serializers.ModelSerializer):
     business_name=serializers.CharField(source="business.name",read_only=True)
     request_title=serializers.CharField(source="request.title",read_only=True)
+    messages=serializers.SerializerMethodField()
     class Meta:
         model=QuoteProposal
         exclude=("business","created_by")
@@ -252,6 +253,11 @@ class QuoteProposalSerializer(serializers.ModelSerializer):
         business=get_membership(self.context["request"].user).business
         if not value.matches.filter(business=business,is_active=True).exists():raise serializers.ValidationError("Esta solicitud no fue asignada a tu empresa.")
         return value
+    def get_messages(self,obj):
+        if hasattr(obj,"conversation"):
+            obj.conversation.messages.filter(sender_type="client",is_read=False).update(is_read=True)
+            return MessageSerializer(obj.conversation.messages.all(),many=True).data
+        return []
     def validate(self,data):
         if data.get("deposit_percentage",0)>100:raise serializers.ValidationError({"deposit_percentage":"No puede superar 100%."})
         if data.get("valid_until") and data["valid_until"]<timezone.localdate():raise serializers.ValidationError({"valid_until":"La vigencia debe terminar en el futuro."})
@@ -270,10 +276,14 @@ class QuoteProposalSerializer(serializers.ModelSerializer):
         return proposal
 
 class MessageSerializer(serializers.ModelSerializer):
+    attachment=serializers.SerializerMethodField()
     class Meta:
         model=Message
-        fields=("id","sender_type","body","is_read","created_at")
-        read_only_fields=("id","sender_type","is_read","created_at")
+        fields=("id","sender_type","body","attachment","is_read","created_at")
+        read_only_fields=("id","sender_type","attachment","is_read","created_at")
+    def get_attachment(self,obj):
+        if not obj.file:return None
+        return {"id":obj.file_id,"name":obj.file.original_name,"size":obj.file.size}
 
 class PublicProposalSerializer(serializers.ModelSerializer):
     business=serializers.SerializerMethodField()

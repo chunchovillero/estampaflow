@@ -230,6 +230,7 @@ class PublicQuoteRequestView(APIView):
         if not quote:return response.Response(status=404)
         proposals=quote.proposals.filter(status__in=("sent","viewed","accepted","rejected"))
         proposals.filter(status="sent").update(status="viewed")
+        Message.objects.filter(conversation__proposal__request=quote,sender_type="business",is_read=False).update(is_read=True)
         return response.Response({"public_id":quote.public_id,"title":quote.title,"category":quote.category,"description":quote.description,"quantity":quote.quantity,"required_date":quote.required_date,"region":quote.region,"commune":quote.commune,"status":quote.status,"proposals":PublicProposalSerializer(proposals,many=True).data})
 
 class PublicQuoteFileView(APIView):
@@ -250,7 +251,10 @@ class PublicQuoteFileView(APIView):
         upload=request.FILES.get("file")
         try:name,mime=checked_upload(upload)
         except ValueError as exc:return response.Response({"error":{"status":400,"details":str(exc)}},status=400)
-        item=QuoteFile.objects.create(request=quote,file=upload,original_name=name,mime_type=mime,size=upload.size,sender_type="client")
+        proposal=None
+        if request.data.get("proposal"):proposal=quote.proposals.filter(public_id=request.data["proposal"]).first()
+        if request.data.get("proposal") and not proposal:return response.Response({"error":{"status":400,"details":"La propuesta indicada no pertenece a esta solicitud."}},status=400)
+        item=QuoteFile.objects.create(request=quote,proposal=proposal,file=upload,original_name=name,mime_type=mime,size=upload.size,sender_type="client")
         return response.Response({"id":item.id,"name":item.original_name},status=201)
 
 class BusinessQuoteFileView(APIView):
@@ -291,8 +295,13 @@ class QuoteProposalViewSet(viewsets.ModelViewSet):
     @decorators.action(detail=True,methods=["get","post"])
     def messages(self,request,pk=None):
         proposal=self.get_object();conversation,_=Conversation.objects.get_or_create(proposal=proposal)
+        conversation.messages.filter(sender_type="client",is_read=False).update(is_read=True)
         if request.method=="POST":
-            serializer=MessageSerializer(data=request.data);serializer.is_valid(raise_exception=True);serializer.save(conversation=conversation,sender_type="business",sender_user=request.user)
+            serializer=MessageSerializer(data=request.data);serializer.is_valid(raise_exception=True)
+            file=None
+            if request.data.get("file_id"):file=QuoteFile.objects.filter(pk=request.data["file_id"],proposal=proposal,business=proposal.business,sender_type="business",is_active=True).first()
+            if request.data.get("file_id") and not file:return response.Response({"error":{"status":400,"details":"El adjunto no pertenece a esta propuesta."}},status=400)
+            serializer.save(conversation=conversation,sender_type="business",sender_user=request.user,file=file)
         return response.Response(MessageSerializer(conversation.messages.all(),many=True).data)
 
 class PublicQuoteMessageView(APIView):
@@ -300,7 +309,11 @@ class PublicQuoteMessageView(APIView):
     def post(self,request,public_id,proposal_id):
         proposal=QuoteProposal.objects.filter(public_id=proposal_id,request__public_id=public_id,request__access_token=request.data.get("token")).first()
         if not proposal:return response.Response(status=404)
-        serializer=MessageSerializer(data=request.data);serializer.is_valid(raise_exception=True);conversation,_=Conversation.objects.get_or_create(proposal=proposal);serializer.save(conversation=conversation,sender_type="client")
+        serializer=MessageSerializer(data=request.data);serializer.is_valid(raise_exception=True);conversation,_=Conversation.objects.get_or_create(proposal=proposal)
+        file=None
+        if request.data.get("file_id"):file=QuoteFile.objects.filter(pk=request.data["file_id"],proposal=proposal,request=proposal.request,sender_type="client",is_active=True).first()
+        if request.data.get("file_id") and not file:return response.Response({"error":{"status":400,"details":"El adjunto no pertenece a esta propuesta."}},status=400)
+        serializer.save(conversation=conversation,sender_type="client",file=file)
         return response.Response(serializer.data,status=201)
 
 class AcceptProposalView(APIView):
