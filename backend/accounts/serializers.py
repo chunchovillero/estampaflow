@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model, password_validation
 from django.db import transaction
 from rest_framework import serializers
 from businesses.models import Business,BusinessMembership,Plan,Subscription
+from businesses.validators import normalize_chilean_phone
 
 User = get_user_model()
 
@@ -35,6 +36,7 @@ class RegisterSerializer(serializers.Serializer):
     def validate_password(self, value):
         password_validation.validate_password(value)
         return value
+    def validate_phone(self,value):return normalize_chilean_phone(value)
     @transaction.atomic
     def create(self, data):
         business_name = data.pop("business_name")
@@ -51,6 +53,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("first_name", "last_name", "phone")
+    def validate_phone(self,value):return normalize_chilean_phone(value)
 
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True)

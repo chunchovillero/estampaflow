@@ -19,6 +19,7 @@ import './notifications.css'
 import './reports.css'
 import './plans.css'
 import './documents.css'
+import './quote-files.css'
 import App from './App'
 
 const queryClient = new QueryClient({defaultOptions:{queries:{retry:1,staleTime:30_000}}})

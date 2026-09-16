@@ -3,6 +3,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 from django.utils import timezone
 from businesses.permissions import get_membership
+from businesses.validators import normalize_chilean_phone
 from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductVariant,QuoteProposal,QuoteRequest
 from .services import enforce_plan_limit,match_quote_request,next_order_number,notify_business,recalculate_order,record_audit
 
@@ -20,6 +21,8 @@ class CustomerSerializer(serializers.ModelSerializer):
         model = Customer
         exclude = ("business",)
         read_only_fields = ("id", "created_at", "updated_at")
+    def validate_phone(self,value):return normalize_chilean_phone(value,required=True)
+    def validate_whatsapp(self,value):return normalize_chilean_phone(value)
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -189,6 +192,8 @@ class PublicOrderRequestSerializer(serializers.Serializer):
     due_date=serializers.DateField(required=False,allow_null=True)
     customizations=serializers.JSONField(required=False)
     notes=serializers.CharField(required=False,allow_blank=True)
+    def validate_phone(self,value):return normalize_chilean_phone(value,required=True)
+    def validate_whatsapp(self,value):return normalize_chilean_phone(value)
     def validate(self,data):
         business=self.context["business"]
         try: product=Product.objects.get(business=business,slug=data["product_slug"],is_active=True,is_public=True)
@@ -223,6 +228,8 @@ class QuoteRequestCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model=QuoteRequest
         fields=("title","category","product_type","description","quantity","specifications","approximate_budget","required_date","region","commune","delivery_method","delivery_scope","contact_name","contact_email","contact_phone","contact_whatsapp")
+    def validate_contact_phone(self,value):return normalize_chilean_phone(value,required=True)
+    def validate_contact_whatsapp(self,value):return normalize_chilean_phone(value)
     @transaction.atomic
     def create(self,validated):
         quote=QuoteRequest.objects.create(**validated);match_quote_request(quote);return quote

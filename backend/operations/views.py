@@ -340,6 +340,10 @@ class OrderFileViewSet(viewsets.ReadOnlyModelViewSet):
         if not valid:return response.Response({"error":{"status":400,"details":"El contenido no coincide con el tipo declarado."}},status=400)
         item=None
         if request.data.get("item"):item=OrderItem.objects.filter(id=request.data["item"],order=order,business=business).first()
+        try:limit=business.subscription.limit("storage_mb")
+        except Exception:limit=None
+        used=OrderFile.objects.filter(business=business,is_active=True).aggregate(value=Sum("size"))["value"] or 0;used+=QuoteFile.objects.filter(business=business,is_active=True).aggregate(value=Sum("size"))["value"] or 0
+        if limit is not None and used+upload.size>int(limit)*1024*1024:return response.Response({"error":{"status":400,"details":"El archivo supera el almacenamiento disponible de tu plan."}},status=400)
         obj=OrderFile.objects.create(business=business,order=order,item=item,file=upload,kind=request.data.get("kind","reference"),original_name=os.path.basename(upload.name),mime_type=expected,size=upload.size,uploaded_by=request.user)
         record_audit("order.file_uploaded",obj,actor=request.user,request=request,metadata={"kind":obj.kind,"order":order.display_number})
         return response.Response(OrderFileSerializer(obj).data,status=201)

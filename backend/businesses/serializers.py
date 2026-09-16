@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model, password_validation
 from django.db import transaction
 from rest_framework import serializers
 from .models import Business, BusinessMembership, BusinessSetting
+from .validators import normalize_chilean_phone,normalize_rut
 
 User = get_user_model()
 
@@ -10,6 +11,9 @@ class BusinessSerializer(serializers.ModelSerializer):
         model = Business
         exclude = ("created_at", "updated_at")
         read_only_fields = ("id", "slug", "status", "is_verified")
+    def validate_phone(self,value):return normalize_chilean_phone(value)
+    def validate_whatsapp(self,value):return normalize_chilean_phone(value)
+    def validate_rut(self,value):return normalize_rut(value)
 
 class MembershipSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)

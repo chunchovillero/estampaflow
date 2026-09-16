@@ -90,6 +90,7 @@ El marketplace y las cotizaciones aparecen en las fases siguientes descritas en 
 - Centro de documentos con fichas de producción, propuestas comerciales y comprobantes de pago en PDF.
 - Solicitudes públicas protegidas por un token de acceso independiente del identificador visible; leer, conversar o aceptar requiere el enlace privado completo.
 - Adjuntos de cotización validados por extensión, MIME y firma; los archivos del cliente solo llegan a empresas seleccionadas y los de propuesta quedan privados por empresa.
+- Normalización y validación en backend para teléfonos chilenos y RUT, aplicada aunque el formulario sea omitido mediante llamadas directas a la API.
 
 ## Arquitectura
 

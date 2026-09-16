@@ -85,3 +85,11 @@ def test_only_superadmin_can_edit_plan_limits():
     plan.refresh_from_db()
     assert response.status_code==200 and plan.monthly_price==19990 and plan.limits=={"orders":20,"users":5}
     assert authenticated(admin).patch(endpoint,{"limits":{"unknown":1}},format="json").status_code==400
+
+def test_chilean_rut_and_phone_are_normalized_and_validated():
+    business,owner,_=setup_business("Tinta Sur","chile@example.cl")
+    client=authenticated(owner)
+    valid=client.patch("/api/v1/businesses/current/",{"rut":"12.345.678-5","phone":"9 1234 5678"},format="json")
+    assert valid.status_code==200 and valid.data["rut"]=="12.345.678-5" and valid.data["phone"]=="+56912345678"
+    invalid=client.patch("/api/v1/businesses/current/",{"rut":"12.345.678-9","phone":"123"},format="json")
+    assert invalid.status_code==400
