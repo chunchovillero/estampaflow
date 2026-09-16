@@ -64,6 +64,53 @@ class PlatformProductView(APIView):
         record_audit("platform.product_moderated",product,actor=request.user,request=request,metadata={"status":value})
         return response.Response({"id":product.id,"moderation_status":product.moderation_status})
 
+class PlatformUserView(APIView):
+    permission_classes=[permissions.IsAdminUser]
+    def get(self,request):
+        users=User.objects.prefetch_related("memberships__business").order_by("-date_joined")[:200]
+        return response.Response([{"id":user.id,"email":user.email,"name":user.get_full_name(),"is_active":user.is_active,"is_superuser":user.is_superuser,"businesses":[{"id":m.business_id,"name":m.business.name,"role":m.role,"active":m.is_active} for m in user.memberships.all()],"date_joined":user.date_joined} for user in users])
+    def patch(self,request,pk):
+        user=User.objects.filter(pk=pk).first()
+        if not user:return response.Response(status=404)
+        if user==request.user and request.data.get("is_active") is False:return response.Response({"error":{"status":400,"details":"No puedes desactivar tu propia cuenta."}},status=400)
+        if "is_active" in request.data:user.is_active=bool(request.data["is_active"]);user.save(update_fields=["is_active"])
+        record_audit("platform.user_updated",user,actor=request.user,request=request,metadata={"is_active":user.is_active})
+        return response.Response({"id":user.id,"is_active":user.is_active})
+
+class PlatformSubscriptionView(APIView):
+    permission_classes=[permissions.IsAdminUser]
+    def get(self,request):
+        from businesses.models import Subscription
+        items=Subscription.objects.select_related("business","plan").order_by("business__name")
+        return response.Response([{"id":item.id,"business_id":item.business_id,"business":item.business.name,"plan_id":item.plan_id,"plan":item.plan.name,"status":item.status,"overrides":item.overrides,"starts_at":item.starts_at,"ends_at":item.ends_at} for item in items])
+    def patch(self,request,pk):
+        from businesses.models import Plan,Subscription
+        item=Subscription.objects.filter(pk=pk).select_related("business").first()
+        if not item:return response.Response(status=404)
+        if "plan_id" in request.data:
+            plan=Plan.objects.filter(pk=request.data["plan_id"],is_active=True).first()
+            if not plan:return response.Response({"error":{"status":400,"details":"El plan no está disponible."}},status=400)
+            item.plan=plan
+        allowed={value for value,_ in item._meta.get_field("status").choices}
+        if "status" in request.data:
+            if request.data["status"] not in allowed:return response.Response({"error":{"status":400,"details":"Estado no válido."}},status=400)
+            item.status=request.data["status"]
+        item.save(update_fields=["plan","status"]);record_audit("platform.subscription_updated",item,business=item.business,actor=request.user,request=request,metadata={"plan":item.plan_id,"status":item.status})
+        return response.Response({"id":item.id,"plan_id":item.plan_id,"status":item.status})
+
+class PlatformQuoteView(APIView):
+    permission_classes=[permissions.IsAdminUser]
+    def get(self,request):
+        items=QuoteRequest.objects.annotate(matches_count=Count("matches",distinct=True),proposals_count=Count("proposals",distinct=True))[:200]
+        return response.Response([{"id":item.id,"public_id":item.public_id,"title":item.title,"category":item.category,"quantity":item.quantity,"region":item.region,"commune":item.commune,"required_date":item.required_date,"status":item.status,"matches_count":item.matches_count,"proposals_count":item.proposals_count,"created_at":item.created_at} for item in items])
+    def patch(self,request,pk):
+        item=QuoteRequest.objects.filter(pk=pk).first()
+        if not item:return response.Response(status=404)
+        if item.status=="accepted":return response.Response({"error":{"status":409,"details":"Una solicitud aceptada ya generó un pedido y no puede moderarse."}},status=409)
+        if request.data.get("status") not in ("open","closed","cancelled"):return response.Response({"error":{"status":400,"details":"Estado de moderación no válido."}},status=400)
+        item.status=request.data["status"];item.save(update_fields=["status","updated_at"]);record_audit("platform.quote_moderated",item,actor=request.user,request=request,metadata={"status":item.status})
+        return response.Response({"id":item.id,"status":item.status})
+
 class PlatformFeaturedView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):

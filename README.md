@@ -83,6 +83,7 @@ El marketplace y las cotizaciones aparecen en las fases siguientes descritas en 
 - Correos transaccionales para solicitudes, propuestas, diseños y notificaciones internas, con transporte SMTP configurable.
 - Galería multiimagen y opciones flexibles de personalización por producto, incluidos archivos protegidos en pedidos públicos.
 - Catálogo local de las 16 regiones y 346 comunas de Chile, expuesto por API y validado en el backend para evitar combinaciones inconsistentes.
+- Superadministración de usuarios, asignación de planes, estado de suscripciones y moderación de solicitudes sin revelar datos privados del cliente.
 - Panel React exclusivo para superadministradores con métricas globales, gestión de empresas y moderación de productos públicos.
 - Auditoría persistente de pedidos, pagos, archivos, diseños, propuestas y acciones de moderación, visible como actividad reciente en el panel de plataforma.
 - Notificaciones internas por usuario y empresa para pedidos públicos, cotizaciones compatibles, propuestas aceptadas y respuestas de diseño.
