@@ -12,7 +12,7 @@ from businesses.models import Business
 from businesses.permissions import HasActiveBusiness, get_membership
 from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteFile,QuoteProposal,QuoteRequest
 from .serializers import CategorySerializer,CustomerSerializer,DesignApprovalSerializer,MarketplaceProductSerializer,MessageSerializer,NotificationSerializer,OrderFileSerializer,OrderListSerializer,OrderSerializer,PaymentSerializer,ProductSerializer,PublicOrderRequestSerializer,PublicProductSerializer,PublicProposalSerializer,QuoteProposalSerializer,QuoteRequestBusinessSerializer,QuoteRequestCreateSerializer
-from .services import enforce_plan_limit,next_order_number,notify_business,recalculate_order,record_audit
+from .services import enforce_plan_limit,next_order_number,notify_business,recalculate_order,record_audit,send_event_email
 
 User = get_user_model()
 FILE_TYPES={".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".pdf":"application/pdf"};MAX_UPLOAD=10*1024*1024
@@ -360,6 +360,8 @@ class DesignApprovalViewSet(viewsets.ReadOnlyModelViewSet):
         approval=DesignApproval.objects.create(order=order,expires_at=request.data.get("expires_at") or None,created_by=request.user)
         if order.status!="waiting_approval":old=order.status;order.status="waiting_approval";order.save(update_fields=["status"]);OrderStatusHistory.objects.create(order=order,from_status=old,to_status=order.status,changed_by=request.user)
         record_audit("design.approval_link_created",approval,business=order.business,actor=request.user,request=request,metadata={"order":order.display_number})
+        from django.conf import settings
+        send_event_email("Revisa tu diseño",f"{order.business.name} publicó un diseño para el pedido {order.display_number}.",[order.customer.email],f"{settings.FRONTEND_URL}/aprobar/{approval.token}")
         return response.Response(DesignApprovalSerializer(approval).data,status=201)
     @decorators.action(detail=True,methods=["post"])
     def revoke(self,request,pk=None):

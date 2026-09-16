@@ -1,10 +1,24 @@
 from decimal import Decimal
 from django.db import transaction
+from django.conf import settings
+from django.core.mail import send_mail
+from django.utils.html import escape
 from django.db.models import Sum
 from businesses.models import BusinessSetting
 from businesses.models import Business
 from .models import AuditLog,Notification,Product,QuoteMatch
 from rest_framework.exceptions import ValidationError
+
+def send_event_email(subject,body,recipients,action_url=""):
+    recipients=[email for email in recipients if email]
+    if not recipients:return
+    full_body=f"{body}\n\n{action_url}" if action_url else body
+    safe_subject=escape(subject);safe_body=escape(body);safe_url=escape(action_url)
+    html=f"<div style='font-family:Arial,sans-serif;max-width:600px'><h2 style='color:#5b4cf0'>{safe_subject}</h2><p>{safe_body}</p>"+(f"<p><a href='{safe_url}' style='background:#5b4cf0;color:white;padding:12px 18px;border-radius:8px;text-decoration:none'>Abrir EstampaFlow</a></p>" if action_url else "")+"<p style='color:#777'>Tus pedidos personalizados, bajo control.</p></div>"
+    def deliver():
+        try:send_mail(subject,full_body,settings.DEFAULT_FROM_EMAIL,recipients,html_message=html,fail_silently=False)
+        except Exception:pass
+    transaction.on_commit(deliver)
 
 def next_order_number(business):
     setting, _ = BusinessSetting.objects.get_or_create(business=business)
@@ -55,4 +69,7 @@ def record_audit(action,entity,business=None,actor=None,request=None,metadata=No
 
 def notify_business(business,kind,title,body="",url=""):
     recipients=business.memberships.filter(is_active=True).select_related("user")
-    return [Notification.objects.create(business=business,recipient=membership.user,kind=kind,title=title,body=body,url=url) for membership in recipients if membership.user.is_active]
+    active=[membership for membership in recipients if membership.user.is_active]
+    notifications=[Notification.objects.create(business=business,recipient=membership.user,kind=kind,title=title,body=body,url=url) for membership in active]
+    send_event_email(title,body,[membership.user.email for membership in active],f"{settings.FRONTEND_URL}{url}" if url else settings.FRONTEND_URL)
+    return notifications

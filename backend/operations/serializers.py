@@ -5,7 +5,7 @@ from django.utils import timezone
 from businesses.permissions import get_membership
 from businesses.validators import normalize_chilean_phone
 from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductVariant,QuoteProposal,QuoteRequest
-from .services import enforce_plan_limit,match_quote_request,next_order_number,notify_business,recalculate_order,record_audit
+from .services import enforce_plan_limit,match_quote_request,next_order_number,notify_business,recalculate_order,record_audit,send_event_email
 
 class NotificationSerializer(serializers.ModelSerializer):
     is_read=serializers.SerializerMethodField()
@@ -222,6 +222,7 @@ class PublicOrderRequestSerializer(serializers.Serializer):
         recalculate_order(order)
         record_audit("order.public_requested",order,metadata={"number":order.display_number})
         notify_business(business,"order.public","Nuevo pedido desde tu tienda",f"{customer.full_name} solicitó {quantity} × {product.name}","/app/pedidos")
+        send_event_email("Recibimos tu solicitud",f"{business.name} recibió tu solicitud {order.display_number} por {quantity} × {product.name}.",[customer.email])
         return order
 
 class QuoteRequestCreateSerializer(serializers.ModelSerializer):
@@ -264,6 +265,8 @@ class QuoteProposalSerializer(serializers.ModelSerializer):
         Conversation.objects.create(proposal=proposal)
         if proposal.status=="sent" and proposal.request.status=="open":proposal.request.status="proposals";proposal.request.save(update_fields=["status"])
         record_audit("quote.proposal_sent",proposal,business=business,actor=request.user,request=request,metadata={"total":str(proposal.total_price)})
+        from django.conf import settings
+        if proposal.status=="sent":send_event_email("Recibiste una propuesta",f"{business.name} respondió a tu solicitud {proposal.request.title}.",[proposal.request.contact_email],f"{settings.FRONTEND_URL}/cotizacion/{proposal.request.public_id}?token={proposal.request.access_token}")
         return proposal
 
 class MessageSerializer(serializers.ModelSerializer):
