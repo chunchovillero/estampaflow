@@ -2,7 +2,9 @@ from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.http import FileResponse,HttpResponse
 from django.db.models import Count, Sum, Q
+from django.db.models.functions import TruncDate
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import decorators, permissions, response, status, viewsets
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -145,6 +147,20 @@ def dashboard(request):
     orders=Order.objects.filter(business=membership.business);today=timezone.localdate();month=today.replace(day=1)
     values={"new":orders.filter(status="new").count(),"overdue":orders.filter(due_date__lt=today).exclude(status__in=("delivered","cancelled")).count(),"due_today":orders.filter(due_date=today).exclude(status__in=("delivered","cancelled")).count(),"waiting_approval":orders.filter(status="waiting_approval").count(),"production":orders.filter(status="production").count(),"ready":orders.filter(status="ready").count(),"pending_balance":orders.aggregate(v=Sum("balance"))["v"] or 0,"monthly_sales":orders.filter(created_at__date__gte=month).exclude(status="cancelled").aggregate(v=Sum("total"))["v"] or 0,"monthly_payments":Payment.objects.filter(business=membership.business,paid_at__date__gte=month,is_void=False).aggregate(v=Sum("amount"))["v"] or 0}
     return response.Response(values)
+
+@decorators.api_view(["GET"])
+def reports(request):
+    membership=get_membership(request.user)
+    if not membership or membership.business.status!="active":return response.Response(status=403)
+    today=timezone.localdate();date_from=parse_date(request.query_params.get("from","")) or today.replace(day=1);date_to=parse_date(request.query_params.get("to","")) or today
+    if date_from>date_to:return response.Response({"error":{"status":400,"details":"La fecha inicial no puede ser posterior a la final."}},status=400)
+    orders=Order.objects.filter(business=membership.business,created_at__date__range=(date_from,date_to)).exclude(status="cancelled")
+    payments=Payment.objects.filter(business=membership.business,paid_at__date__range=(date_from,date_to),is_void=False)
+    sales=orders.aggregate(value=Sum("total"))["value"] or 0
+    top_items=OrderItem.objects.filter(business=membership.business,order__in=orders).values("product__name","description").annotate(quantity=Sum("quantity")).order_by("-quantity")[:8]
+    daily=orders.annotate(day=TruncDate("created_at")).values("day").annotate(total=Sum("total"),orders=Count("id")).order_by("day")
+    by_status=orders.values("status").annotate(count=Count("id")).order_by("status")
+    return response.Response({"from":date_from,"to":date_to,"sales":sales,"payments":payments.aggregate(value=Sum("amount"))["value"] or 0,"pending_balance":orders.aggregate(value=Sum("balance"))["value"] or 0,"orders":orders.count(),"average_ticket":sales/orders.count() if orders.exists() else 0,"daily":list(daily),"by_status":list(by_status),"top_products":[{"name":item["product__name"] or item["description"],"quantity":item["quantity"]} for item in top_items]})
 
 class PublicStoreView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[]

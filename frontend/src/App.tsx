@@ -21,6 +21,7 @@ import Messages from './pages/Messages'
 import RecoverPassword from './pages/RecoverPassword'
 import Register from './pages/Register'
 import Team from './pages/Team'
+import Reports from './pages/Reports'
 import TokenAction from './pages/TokenAction'
 import AdminLayout from './components/AdminLayout'
 import AdminDashboard from './pages/AdminDashboard'
@@ -35,7 +36,7 @@ export default function App(){return <AuthProvider><Routes>
   <Route path="/aprobar/:token" element={<DesignApproval/>}/>
   <Route path="/ingresar" element={<Guest><Login/></Guest>}/><Route path="/registro" element={<Guest><Register/></Guest>}/>
   <Route path="/recuperar" element={<RecoverPassword/>}/><Route path="/restablecer/:uid/:token" element={<TokenAction mode="reset"/>}/><Route path="/verificar-correo/:uid/:token" element={<TokenAction mode="verify"/>}/>
-  <Route path="/app" element={<BusinessProtected><Layout/></BusinessProtected>}><Route index element={<Dashboard/>}/><Route path="clientes" element={<Customers/>}/><Route path="productos" element={<Products/>}/><Route path="pedidos" element={<Orders/>}/><Route path="produccion" element={<Production/>}/><Route path="pagos" element={<Payments/>}/><Route path="cotizaciones" element={<Quotes/>}/><Route path="disenos" element={<Designs/>}/><Route path="mensajes" element={<Messages/>}/><Route path="empresa" element={<BusinessSettings/>}/><Route path="equipo" element={<Team/>}/></Route>
+  <Route path="/app" element={<BusinessProtected><Layout/></BusinessProtected>}><Route index element={<Dashboard/>}/><Route path="clientes" element={<Customers/>}/><Route path="productos" element={<Products/>}/><Route path="pedidos" element={<Orders/>}/><Route path="produccion" element={<Production/>}/><Route path="pagos" element={<Payments/>}/><Route path="reportes" element={<Reports/>}/><Route path="cotizaciones" element={<Quotes/>}/><Route path="disenos" element={<Designs/>}/><Route path="mensajes" element={<Messages/>}/><Route path="empresa" element={<BusinessSettings/>}/><Route path="equipo" element={<Team/>}/></Route>
   <Route path="/plataforma" element={<AdminProtected><AdminLayout/></AdminProtected>}><Route index element={<AdminDashboard/>}/></Route>
   <Route path="*" element={<Navigate to="/"/>}/>
 </Routes></AuthProvider>}

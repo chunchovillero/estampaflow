@@ -90,3 +90,19 @@ def test_monthly_order_limit_is_enforced():
     Subscription.objects.create(business=business,plan=plan)
     response=client.post("/api/v1/orders/",order_payload(customer,product),format="json")
     assert response.status_code==400 and Order.objects.filter(business=business).count()==0
+
+def test_reports_calculate_period_and_never_mix_businesses():
+    business,_,client=tenant("Aurora","reports@aurora.cl");_,product,customer=catalog(business)
+    order_id=client.post("/api/v1/orders/",order_payload(customer,product),format="json").data["id"]
+    client.post("/api/v1/payments/",{"order":order_id,"amount":"5000","paid_at":timezone.now().isoformat(),"method":"transfer"},format="json")
+    other,_,other_client=tenant("Sur","reports@sur.cl");_,other_product,other_customer=catalog(other)
+    other_client.post("/api/v1/orders/",order_payload(other_customer,other_product,"50000",3),format="json")
+    today=timezone.localdate().isoformat();response=client.get(f"/api/v1/reports/?from={today}&to={today}")
+    assert response.status_code==200
+    assert Decimal(response.data["sales"])==Decimal("21000")
+    assert Decimal(response.data["payments"])==Decimal("5000")
+    assert response.data["orders"]==1 and response.data["top_products"][0]["quantity"]==2
+
+def test_reports_reject_invalid_date_range():
+    _,_,client=tenant("Aurora","dates@aurora.cl")
+    assert client.get("/api/v1/reports/?from=2026-09-20&to=2026-09-01").status_code==400

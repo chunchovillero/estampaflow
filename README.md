@@ -85,6 +85,7 @@ El marketplace y las cotizaciones aparecen en las fases siguientes descritas en 
 - Auditoría persistente de pedidos, pagos, archivos, diseños, propuestas y acciones de moderación, visible como actividad reciente en el panel de plataforma.
 - Notificaciones internas por usuario y empresa para pedidos públicos, cotizaciones compatibles, propuestas aceptadas y respuestas de diseño.
 - Administración de empresas y productos destacados desde el panel de plataforma, con posición, vigencia, motivo y modalidad pagada preparados en el modelo.
+- Reportes privados por período con ventas, pagos, saldos, ticket promedio, pedidos por estado y productos más vendidos.
 
 ## Arquitectura
 
