@@ -4,6 +4,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from businesses.permissions import get_membership
 from businesses.validators import normalize_chilean_phone
+from businesses.territories import valid_location
 from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductImage,ProductVariant,QuoteProposal,QuoteRequest
 from .services import enforce_plan_limit,match_quote_request,next_order_number,notify_business,recalculate_order,record_audit,send_event_email
 
@@ -23,6 +24,10 @@ class CustomerSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at", "updated_at")
     def validate_phone(self,value):return normalize_chilean_phone(value,required=True)
     def validate_whatsapp(self,value):return normalize_chilean_phone(value)
+    def validate(self,data):
+        region=data.get("region",getattr(self.instance,"region",""));commune=data.get("commune",getattr(self.instance,"commune",""))
+        if not valid_location(region,commune):raise serializers.ValidationError({"commune":"La comuna no pertenece a la región seleccionada."})
+        return data
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -216,6 +221,7 @@ class PublicOrderRequestSerializer(serializers.Serializer):
     def validate_phone(self,value):return normalize_chilean_phone(value,required=True)
     def validate_whatsapp(self,value):return normalize_chilean_phone(value)
     def validate(self,data):
+        if not valid_location(data.get("region",""),data.get("commune","")):raise serializers.ValidationError({"commune":"La comuna no pertenece a la región seleccionada."})
         business=self.context["business"]
         try: product=Product.objects.get(business=business,slug=data["product_slug"],is_active=True,is_public=True)
         except Product.DoesNotExist: raise serializers.ValidationError({"product_slug":"El producto no está disponible."})
@@ -257,6 +263,9 @@ class QuoteRequestCreateSerializer(serializers.ModelSerializer):
         fields=("title","category","product_type","description","quantity","specifications","approximate_budget","required_date","region","commune","delivery_method","delivery_scope","contact_name","contact_email","contact_phone","contact_whatsapp")
     def validate_contact_phone(self,value):return normalize_chilean_phone(value,required=True)
     def validate_contact_whatsapp(self,value):return normalize_chilean_phone(value)
+    def validate(self,data):
+        if not valid_location(data.get("region",""),data.get("commune","")):raise serializers.ValidationError({"commune":"La comuna no pertenece a la región seleccionada."})
+        return data
     @transaction.atomic
     def create(self,validated):
         quote=QuoteRequest.objects.create(**validated);match_quote_request(quote);return quote

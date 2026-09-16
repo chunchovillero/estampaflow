@@ -7,6 +7,11 @@ from rest_framework.views import APIView
 from .models import BusinessMembership,BusinessSetting,Plan,Subscription
 from .permissions import HasActiveBusiness, IsBusinessOwner, get_membership
 from .serializers import BusinessSerializer,BusinessSettingSerializer,InviteMemberSerializer,MembershipSerializer
+from .territories import CHILE_TERRITORIES
+
+class TerritoryView(APIView):
+    permission_classes=[permissions.AllowAny];authentication_classes=[]
+    def get(self,request):return Response([{"region":region,"communes":communes} for region,communes in CHILE_TERRITORIES.items()])
 
 class CurrentBusinessView(APIView):
     permission_classes = [HasActiveBusiness]

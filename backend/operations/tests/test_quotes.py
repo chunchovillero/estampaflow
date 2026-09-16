@@ -33,6 +33,14 @@ def test_deterministic_matching_excludes_unverified_business():
     assert response.status_code==201 and response.data["matches"]==1
     assert quote.matches.get().business==eligible
 
+def test_chilean_territory_catalog_and_location_validation():
+    territories=APIClient().get("/api/v1/businesses/territories/")
+    assert territories.status_code==200 and len(territories.data)==16
+    assert sum(len(item["communes"]) for item in territories.data)==346
+    payload=quote_payload();payload["commune"]="Valparaíso"
+    response=APIClient().post("/api/v1/public/quotes/",payload,format="json")
+    assert response.status_code==400
+
 def test_only_matched_business_can_see_and_answer_request():
     matched,user=company("Aurora","a@test.cl");outside_business,outsider=company("Norte","n@test.cl",region="Antofagasta");outside_business.accepts_quotes=False;outside_business.save(update_fields=["accepts_quotes"])
     quote_id=APIClient().post("/api/v1/public/quotes/",quote_payload(),format="json").data["public_id"];quote=QuoteRequest.objects.get(public_id=quote_id)

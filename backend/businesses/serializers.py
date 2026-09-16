@@ -3,6 +3,7 @@ from django.db import transaction
 from rest_framework import serializers
 from .models import Business, BusinessMembership, BusinessSetting
 from .validators import normalize_chilean_phone,normalize_rut
+from .territories import valid_location
 
 User = get_user_model()
 
@@ -14,6 +15,10 @@ class BusinessSerializer(serializers.ModelSerializer):
     def validate_phone(self,value):return normalize_chilean_phone(value)
     def validate_whatsapp(self,value):return normalize_chilean_phone(value)
     def validate_rut(self,value):return normalize_rut(value)
+    def validate(self,data):
+        region=data.get("region",getattr(self.instance,"region",""));commune=data.get("commune",getattr(self.instance,"commune",""))
+        if not valid_location(region,commune):raise serializers.ValidationError({"commune":"La comuna no pertenece a la región seleccionada."})
+        return data
 
 class MembershipSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
