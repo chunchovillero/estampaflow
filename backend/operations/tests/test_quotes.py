@@ -1,10 +1,11 @@
 from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient
 from businesses.models import Business,BusinessMembership
-from operations.models import Order,Product,ProductCategory,QuoteProposal,QuoteRequest
+from operations.models import Order,Product,ProductCategory,QuoteFile,QuoteProposal,QuoteRequest
 
 pytestmark=pytest.mark.django_db
 
@@ -38,10 +39,12 @@ def test_only_matched_business_can_see_and_answer_request():
 def test_privacy_and_atomic_acceptance_create_single_winner_order():
     business,user=company("Aurora","a@test.cl");quote_id=APIClient().post("/api/v1/public/quotes/",quote_payload(),format="json").data["public_id"];quote=QuoteRequest.objects.get(public_id=quote_id)
     proposal=QuoteProposal.objects.create(request=quote,business=business,total_price=240000,unit_price=12000,production_days=7,valid_until=timezone.localdate()+timedelta(days=7),created_by=user,status="sent")
-    public=APIClient().get(f"/api/v1/public/quotes/{quote.public_id}/")
+    assert APIClient().get(f"/api/v1/public/quotes/{quote.public_id}/").status_code==404
+    public=APIClient().get(f"/api/v1/public/quotes/{quote.public_id}/?token={quote.access_token}")
     assert "contact_email" not in public.data and "contact_phone" not in public.data
     endpoint=f"/api/v1/public/quotes/{quote.public_id}/proposals/{proposal.public_id}/accept/"
-    first=APIClient().post(endpoint,{},format="json");second=APIClient().post(endpoint,{},format="json")
+    assert APIClient().post(endpoint,{"token":"00000000-0000-0000-0000-000000000000"},format="json").status_code==404
+    first=APIClient().post(endpoint,{"token":str(quote.access_token)},format="json");second=APIClient().post(endpoint,{"token":str(quote.access_token)},format="json")
     quote.refresh_from_db();proposal.refresh_from_db()
     assert first.status_code==200 and second.status_code==409
     assert quote.accepted_proposal==proposal and proposal.status=="accepted"
@@ -57,3 +60,16 @@ def test_companies_never_see_competitor_proposals():
     pdf=auth(first_user).get(f"/api/v1/quote-proposals/{own.id}/pdf/")
     assert pdf.status_code==200 and pdf["Content-Type"]=="application/pdf"
     assert auth(second_user).get(f"/api/v1/quote-proposals/{own.id}/pdf/").status_code==404
+
+def test_quote_files_require_token_and_only_reach_matched_businesses():
+    business,user=company("Aurora","files@test.cl");outside_business,outsider=company("Norte","files-norte@test.cl",region="Antofagasta");outside_business.accepts_quotes=False;outside_business.save(update_fields=["accepts_quotes"])
+    created=APIClient().post("/api/v1/public/quotes/",quote_payload(),format="json");quote=QuoteRequest.objects.get(public_id=created.data["public_id"])
+    upload=SimpleUploadedFile("referencia.pdf",b"%PDF-1.4 demo",content_type="application/pdf")
+    endpoint=f"/api/v1/public/quotes/{quote.public_id}/files/"
+    assert APIClient().post(endpoint,{"file":upload},format="multipart").status_code==404
+    upload=SimpleUploadedFile("referencia.pdf",b"%PDF-1.4 demo",content_type="application/pdf")
+    response=APIClient().post(endpoint,{"token":str(quote.access_token),"file":upload},format="multipart")
+    item=QuoteFile.objects.get(id=response.data["id"])
+    assert response.status_code==201 and auth(user).get("/api/v1/quote-files/").data[0]["id"]==item.id
+    assert auth(outsider).get(f"/api/v1/quote-files/{item.id}/").status_code==404
+    assert APIClient().get(f"{endpoint}{item.id}/?token={quote.access_token}").status_code==200

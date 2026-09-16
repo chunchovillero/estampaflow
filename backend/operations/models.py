@@ -199,6 +199,7 @@ class QuoteRequest(models.Model):
         CLOSED="closed","Cerrada"
         CANCELLED="cancelled","Cancelada"
     public_id=models.UUIDField(default=uuid.uuid4,unique=True,editable=False)
+    access_token=models.UUIDField(default=uuid.uuid4,unique=True,editable=False)
     title=models.CharField(max_length=180)
     category=models.CharField(max_length=100)
     product_type=models.CharField(max_length=120,blank=True)
@@ -274,6 +275,20 @@ class Message(models.Model):
     sender_user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,null=True,blank=True)
     body=models.TextField()
     is_read=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta: ordering=("created_at",)
+
+class QuoteFile(models.Model):
+    request=models.ForeignKey(QuoteRequest,on_delete=models.PROTECT,related_name="files")
+    proposal=models.ForeignKey(QuoteProposal,on_delete=models.PROTECT,related_name="files",null=True,blank=True)
+    business=models.ForeignKey(Business,on_delete=models.PROTECT,related_name="quote_files",null=True,blank=True)
+    file=models.FileField(upload_to="quotes/%Y/%m/")
+    original_name=models.CharField(max_length=255)
+    mime_type=models.CharField(max_length=100)
+    size=models.PositiveIntegerField()
+    sender_type=models.CharField(max_length=10,choices=[("client","Cliente"),("business","Empresa")])
+    uploaded_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,null=True,blank=True)
+    is_active=models.BooleanField(default=True)
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta: ordering=("created_at",)
 

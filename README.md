@@ -88,6 +88,8 @@ El marketplace y las cotizaciones aparecen en las fases siguientes descritas en 
 - Reportes privados por período con ventas, pagos, saldos, ticket promedio, pedidos por estado y productos más vendidos.
 - Consumo del plan visible por empresa y editor exclusivo del superadministrador para precios y límites configurables.
 - Centro de documentos con fichas de producción, propuestas comerciales y comprobantes de pago en PDF.
+- Solicitudes públicas protegidas por un token de acceso independiente del identificador visible; leer, conversar o aceptar requiere el enlace privado completo.
+- Adjuntos de cotización validados por extensión, MIME y firma; los archivos del cliente solo llegan a empresas seleccionadas y los de propuesta quedan privados por empresa.
 
 ## Arquitectura
 
@@ -151,6 +153,8 @@ docker compose run --rm backend python manage.py seed_demo
 # Compilar frontend
 docker compose run --rm frontend npm run build
 ```
+
+GitHub Actions ejecuta migraciones, las pruebas del backend y la compilación del frontend en cada push a `main` y en cada pull request.
 
 ## Credenciales de demostración
 

@@ -10,11 +10,20 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from businesses.models import Business
 from businesses.permissions import HasActiveBusiness, get_membership
-from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteProposal,QuoteRequest
+from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteFile,QuoteProposal,QuoteRequest
 from .serializers import CategorySerializer,CustomerSerializer,DesignApprovalSerializer,MarketplaceProductSerializer,MessageSerializer,NotificationSerializer,OrderFileSerializer,OrderListSerializer,OrderSerializer,PaymentSerializer,ProductSerializer,PublicOrderRequestSerializer,PublicProductSerializer,PublicProposalSerializer,QuoteProposalSerializer,QuoteRequestBusinessSerializer,QuoteRequestCreateSerializer
 from .services import enforce_plan_limit,next_order_number,notify_business,recalculate_order,record_audit
 
 User = get_user_model()
+FILE_TYPES={".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".pdf":"application/pdf"};MAX_UPLOAD=10*1024*1024
+def checked_upload(upload):
+    import os
+    if not upload:raise ValueError("Selecciona un archivo.")
+    ext=os.path.splitext(upload.name)[1].lower();expected=FILE_TYPES.get(ext)
+    if not expected or upload.content_type!=expected or upload.size>MAX_UPLOAD:raise ValueError("Archivo no permitido. Usa PNG, JPG, WEBP o PDF de hasta 10 MB.")
+    head=upload.read(12);upload.seek(0);valid=(expected=="application/pdf" and head.startswith(b"%PDF")) or (expected=="image/png" and head.startswith(b"\x89PNG")) or (expected=="image/jpeg" and head.startswith(b"\xff\xd8")) or (expected=="image/webp" and head[8:12]==b"WEBP")
+    if not valid:raise ValueError("El contenido no coincide con el tipo declarado.")
+    return os.path.basename(upload.name),expected
 
 class PlatformDashboardView(APIView):
     permission_classes=[permissions.IsAdminUser]
@@ -215,13 +224,59 @@ class PublicQuoteRequestView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     def post(self,request):
         serializer=QuoteRequestCreateSerializer(data=request.data);serializer.is_valid(raise_exception=True);quote=serializer.save()
-        return response.Response({"public_id":quote.public_id,"matches":quote.matches.count(),"detail":"Solicitud creada. Guarda este enlace para revisar tus propuestas."},status=201)
+        return response.Response({"public_id":quote.public_id,"access_token":quote.access_token,"matches":quote.matches.count(),"detail":"Solicitud creada. Guarda este enlace para revisar tus propuestas."},status=201)
     def get(self,request,public_id):
-        quote=QuoteRequest.objects.filter(public_id=public_id).prefetch_related("proposals__business","proposals__conversation__messages").first()
+        quote=QuoteRequest.objects.filter(public_id=public_id,access_token=request.query_params.get("token")).prefetch_related("proposals__business","proposals__conversation__messages").first()
         if not quote:return response.Response(status=404)
         proposals=quote.proposals.filter(status__in=("sent","viewed","accepted","rejected"))
         proposals.filter(status="sent").update(status="viewed")
         return response.Response({"public_id":quote.public_id,"title":quote.title,"category":quote.category,"description":quote.description,"quantity":quote.quantity,"required_date":quote.required_date,"region":quote.region,"commune":quote.commune,"status":quote.status,"proposals":PublicProposalSerializer(proposals,many=True).data})
+
+class PublicQuoteFileView(APIView):
+    permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
+    def quote(self,request,public_id):return QuoteRequest.objects.filter(public_id=public_id,access_token=request.query_params.get("token") or request.data.get("token")).first()
+    def get(self,request,public_id,file_id=None):
+        quote=self.quote(request,public_id)
+        if not quote:return response.Response(status=404)
+        files=QuoteFile.objects.filter(request=quote,is_active=True)
+        if file_id:
+            item=files.filter(pk=file_id).first()
+            if not item:return response.Response(status=404)
+            return FileResponse(item.file.open("rb"),content_type=item.mime_type,filename=item.original_name)
+        return response.Response([{"id":item.id,"name":item.original_name,"mime_type":item.mime_type,"size":item.size,"sender_type":item.sender_type,"proposal":str(item.proposal.public_id) if item.proposal else None,"url":f"/api/v1/public/quotes/{quote.public_id}/files/{item.id}/?token={quote.access_token}"} for item in files])
+    def post(self,request,public_id,file_id=None):
+        quote=self.quote(request,public_id)
+        if not quote:return response.Response(status=404)
+        upload=request.FILES.get("file")
+        try:name,mime=checked_upload(upload)
+        except ValueError as exc:return response.Response({"error":{"status":400,"details":str(exc)}},status=400)
+        item=QuoteFile.objects.create(request=quote,file=upload,original_name=name,mime_type=mime,size=upload.size,sender_type="client")
+        return response.Response({"id":item.id,"name":item.original_name},status=201)
+
+class BusinessQuoteFileView(APIView):
+    permission_classes=[HasActiveBusiness]
+    def queryset(self,request):
+        business=get_membership(request.user).business
+        return QuoteFile.objects.filter(Q(business=business)|Q(sender_type="client",request__matches__business=business,request__matches__is_active=True),is_active=True).distinct()
+    def get(self,request,file_id=None):
+        files=self.queryset(request)
+        if file_id:
+            item=files.filter(pk=file_id).first()
+            if not item:return response.Response(status=404)
+            return FileResponse(item.file.open("rb"),content_type=item.mime_type,filename=item.original_name)
+        return response.Response([{"id":item.id,"request":item.request_id,"proposal":item.proposal_id,"name":item.original_name,"size":item.size,"sender_type":item.sender_type,"url":f"/api/v1/quote-files/{item.id}/"} for item in files])
+    def post(self,request,file_id=None):
+        business=get_membership(request.user).business;proposal=QuoteProposal.objects.filter(pk=request.data.get("proposal"),business=business).first()
+        if not proposal:return response.Response(status=404)
+        upload=request.FILES.get("file")
+        try:name,mime=checked_upload(upload)
+        except ValueError as exc:return response.Response({"error":{"status":400,"details":str(exc)}},status=400)
+        try:limit=business.subscription.limit("storage_mb")
+        except Exception:limit=None
+        used=OrderFile.objects.filter(business=business,is_active=True).aggregate(value=Sum("size"))["value"] or 0;used+=QuoteFile.objects.filter(business=business,is_active=True).aggregate(value=Sum("size"))["value"] or 0
+        if limit is not None and used+upload.size>int(limit)*1024*1024:return response.Response({"error":{"status":400,"details":"El archivo supera el almacenamiento disponible de tu plan."}},status=400)
+        item=QuoteFile.objects.create(request=proposal.request,proposal=proposal,business=business,file=upload,original_name=name,mime_type=mime,size=upload.size,sender_type="business",uploaded_by=request.user)
+        return response.Response({"id":item.id,"name":item.original_name},status=201)
 
 class AvailableQuoteViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes=[HasActiveBusiness];serializer_class=QuoteRequestBusinessSerializer
@@ -243,7 +298,7 @@ class QuoteProposalViewSet(viewsets.ModelViewSet):
 class PublicQuoteMessageView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     def post(self,request,public_id,proposal_id):
-        proposal=QuoteProposal.objects.filter(public_id=proposal_id,request__public_id=public_id).first()
+        proposal=QuoteProposal.objects.filter(public_id=proposal_id,request__public_id=public_id,request__access_token=request.data.get("token")).first()
         if not proposal:return response.Response(status=404)
         serializer=MessageSerializer(data=request.data);serializer.is_valid(raise_exception=True);conversation,_=Conversation.objects.get_or_create(proposal=proposal);serializer.save(conversation=conversation,sender_type="client")
         return response.Response(serializer.data,status=201)
@@ -252,7 +307,7 @@ class AcceptProposalView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     @transaction.atomic
     def post(self,request,public_id,proposal_id):
-        quote=QuoteRequest.objects.select_for_update().filter(public_id=public_id).first()
+        quote=QuoteRequest.objects.select_for_update().filter(public_id=public_id,access_token=request.data.get("token")).first()
         if not quote:return response.Response(status=404)
         if quote.accepted_proposal_id:return response.Response({"error":{"status":409,"details":"Esta solicitud ya tiene una propuesta aceptada."}},status=409)
         proposal=QuoteProposal.objects.select_for_update().filter(public_id=proposal_id,request=quote,status__in=("sent","viewed")).first()
