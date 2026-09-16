@@ -63,3 +63,25 @@ def test_plan_limits_active_members():
     }, format="json")
     assert response.status_code == 400
     assert not User.objects.filter(email="team-limit@example.cl").exists()
+
+def test_business_sees_own_plan_and_usage():
+    from operations.models import Product,ProductCategory
+    business,owner,_=setup_business("Tinta Sur","plan-owner@example.cl")
+    plan=Plan.objects.create(code="starter",name="Starter",monthly_price=9990,limits={"orders":10,"public_products":2,"users":3,"storage_mb":100,"quote_responses":4})
+    Subscription.objects.create(business=business,plan=plan)
+    category=ProductCategory.objects.create(business=business,name="Tazones")
+    Product.objects.create(business=business,category=category,name="Tazón",slug="tazon",is_public=True)
+    response=authenticated(owner).get("/api/v1/businesses/plan/")
+    assert response.status_code==200 and response.data["plan"]["code"]=="starter"
+    assert response.data["usage"]["users"]==1 and response.data["usage"]["public_products"]==1
+
+def test_only_superadmin_can_edit_plan_limits():
+    _,owner,_=setup_business("Tinta Sur","normal-owner@example.cl")
+    plan=Plan.objects.create(code="editable",name="Editable",limits={"orders":10})
+    endpoint=f"/api/v1/businesses/platform/plans/{plan.id}/"
+    assert authenticated(owner).patch(endpoint,{"limits":{"orders":20}},format="json").status_code==403
+    admin=User.objects.create_superuser(username="plans-admin@example.cl",email="plans-admin@example.cl",password="Marea-Violeta-4821")
+    response=authenticated(admin).patch(endpoint,{"monthly_price":19990,"limits":{"orders":20,"users":5}},format="json")
+    plan.refresh_from_db()
+    assert response.status_code==200 and plan.monthly_price==19990 and plan.limits=={"orders":20,"users":5}
+    assert authenticated(admin).patch(endpoint,{"limits":{"unknown":1}},format="json").status_code==400
