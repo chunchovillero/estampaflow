@@ -141,6 +141,13 @@ Las migraciones se ejecutan automáticamente al iniciar el backend.
 | `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT` | Transporte de correo; consola durante desarrollo |
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Credenciales SMTP, solo en `.env` |
 | `DEFAULT_FROM_EMAIL` | Remitente de las notificaciones |
+| `STORAGE_BACKEND` | `local` en desarrollo o `s3` en producción |
+| `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME` | Bucket privado y región del almacenamiento |
+| `AWS_S3_ENDPOINT_URL` | Endpoint opcional para proveedores compatibles con S3 |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Credenciales del almacenamiento, solo en `.env` o secretos del entorno |
+| `AWS_QUERYSTRING_EXPIRE` | Duración de las URLs firmadas; 900 segundos por defecto |
+| `DJANGO_SECURE_SSL_REDIRECT`, `DJANGO_COOKIE_SECURE` | Deben ser `true` detrás de HTTPS en producción |
+| `DJANGO_HSTS_SECONDS` | HSTS; habilitar después de confirmar HTTPS en todo el dominio |
 
 ## Comandos de desarrollo
 
@@ -180,6 +187,7 @@ Estas credenciales son exclusivamente locales. El comando no se ejecuta automát
 - **Redis diferido:** no hay tareas en segundo plano en la Fase 1; se agregará junto con notificaciones.
 - **Planes configurables:** los límites viven en la base de datos y el backend valida pedidos mensuales, productos públicos, usuarios y respuestas a cotizaciones. El almacenamiento queda preparado como límite configurable.
 - **PWA preparada:** el frontend incluye manifiesto instalable y un service worker básico para cargar la interfaz cuando falla la red.
+- **Archivos locales o S3:** desarrollo usa el volumen local. Con `STORAGE_BACKEND=s3`, Django guarda archivos en un bucket privado y genera URLs firmadas con vencimiento.
 
 ## Roadmap
 
