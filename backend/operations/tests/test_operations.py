@@ -2,10 +2,11 @@ from datetime import timedelta
 from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient
 from businesses.models import Business,BusinessMembership,Plan,Subscription
-from operations.models import AuditLog,Customer,Order,Payment,Product,ProductCategory
+from operations.models import AuditLog,Customer,Order,Payment,Product,ProductCategory,ProductImage
 
 pytestmark=pytest.mark.django_db
 User=get_user_model()
@@ -31,6 +32,19 @@ def test_customer_and_product_are_assigned_to_authenticated_business():
     customer=client.post("/api/v1/customers/",{"first_name":"Ana","phone":"+56911111111"},format="json")
     assert customer.status_code==201
     assert Customer.objects.get(id=customer.data["id"]).business==business
+
+def test_product_gallery_is_tenant_scoped_and_customization_schema_is_validated():
+    business,_,client=tenant("Aurora","gallery@aurora.cl");category,product,_=catalog(business)
+    other,_,other_client=tenant("Sur","gallery@sur.cl")
+    image=SimpleUploadedFile("muestra.png",b"\x89PNG\r\n\x1a\n"+b"0"*20,content_type="image/png")
+    uploaded=client.post(f"/api/v1/products/{product.id}/images/",{"file":image,"alt_text":"Polera negra"},format="multipart")
+    assert uploaded.status_code==201 and ProductImage.objects.get(id=uploaded.data["id"]).business==business
+    assert other_client.get(f"/api/v1/products/{product.id}/images/").status_code==404
+    valid={"name":"Tazón","category":category.id,"sale_price":"5000","customization_options":[{"label":"Color interior","type":"select","required":True,"choices":["Rojo","Azul"]}]}
+    created=client.post("/api/v1/products/",valid,format="json")
+    assert created.status_code==201 and created.data["customization_options"][0]["key"]=="color-interior"
+    valid["name"]="Tazón inválido";valid["customization_options"]=[{"label":"Color","type":"select","choices":[]}]
+    assert client.post("/api/v1/products/",valid,format="json").status_code==400
 
 def test_lists_never_expose_other_tenant_data():
     first,_,client=tenant("Aurora","owner@aurora.cl");second,_,_=tenant("Sur","owner@sur.cl")

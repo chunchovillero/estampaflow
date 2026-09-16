@@ -81,6 +81,14 @@ class ProductVariant(TenantModel):
     is_active = models.BooleanField(default=True)
     class Meta: ordering = ("name",)
 
+class ProductImage(TenantModel):
+    product=models.ForeignKey(Product,on_delete=models.CASCADE,related_name="images")
+    image=models.ImageField(upload_to="products/gallery/%Y/%m/")
+    alt_text=models.CharField(max_length=180,blank=True)
+    position=models.PositiveSmallIntegerField(default=0)
+    size=models.PositiveIntegerField(default=0)
+    class Meta: ordering=("position","id")
+
 class Order(TenantModel):
     class Status(models.TextChoices):
         NEW="new", "Nuevo"
@@ -106,6 +114,7 @@ class Order(TenantModel):
         QUOTE="quote", "Cotización"
     number = models.PositiveIntegerField()
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    public_access_token=models.UUIDField(default=uuid.uuid4,unique=True,editable=False)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="orders")
     origin = models.CharField(max_length=20, choices=Origin.choices, default=Origin.MANUAL)
     due_date = models.DateField(null=True, blank=True)

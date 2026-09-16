@@ -4,7 +4,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from businesses.permissions import get_membership
 from businesses.validators import normalize_chilean_phone
-from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductVariant,QuoteProposal,QuoteRequest
+from .models import Conversation,Customer,DesignApproval,DesignChangeRequest,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductImage,ProductVariant,QuoteProposal,QuoteRequest
 from .services import enforce_plan_limit,match_quote_request,next_order_number,notify_business,recalculate_order,record_audit,send_event_email
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -36,8 +36,17 @@ class VariantSerializer(serializers.ModelSerializer):
         exclude = ("business", "product")
         read_only_fields = ("id", "created_at", "updated_at")
 
+class ProductImageSerializer(serializers.ModelSerializer):
+    url=serializers.SerializerMethodField()
+    class Meta:
+        model=ProductImage
+        fields=("id","url","alt_text","position","size")
+        read_only_fields=fields
+    def get_url(self,obj):return obj.image.url
+
 class ProductSerializer(serializers.ModelSerializer):
     variants = VariantSerializer(many=True, required=False)
+    images = ProductImageSerializer(many=True,read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
     class Meta:
         model = Product
@@ -47,6 +56,17 @@ class ProductSerializer(serializers.ModelSerializer):
         if value.business_id != get_membership(self.context["request"].user).business_id:
             raise serializers.ValidationError("La categoría no pertenece a tu empresa.")
         return value
+    def validate_customization_options(self,value):
+        allowed={"text","number","select","color","file"};clean=[]
+        if not isinstance(value,list):raise serializers.ValidationError("Las opciones deben ser una lista.")
+        for index,item in enumerate(value):
+            if not isinstance(item,dict) or not str(item.get("label","")).strip():raise serializers.ValidationError(f"La opción {index+1} necesita un nombre.")
+            kind=item.get("type","text")
+            if kind not in allowed:raise serializers.ValidationError(f"Tipo no permitido en la opción {index+1}.")
+            choices=[str(choice).strip() for choice in item.get("choices",[]) if str(choice).strip()] if kind=="select" else []
+            if kind=="select" and not choices:raise serializers.ValidationError(f"La opción {index+1} necesita alternativas.")
+            clean.append({"key":slugify(item.get("key") or item["label"]),"label":str(item["label"]).strip(),"type":kind,"required":bool(item.get("required",False)),"choices":choices})
+        return clean
     @transaction.atomic
     def create(self, validated):
         validated.pop("business", None)
@@ -165,10 +185,11 @@ class OrderListSerializer(serializers.ModelSerializer):
 
 class PublicProductSerializer(serializers.ModelSerializer):
     variants=VariantSerializer(many=True,read_only=True)
+    images=ProductImageSerializer(many=True,read_only=True)
     category_name=serializers.CharField(source="category.name",read_only=True)
     class Meta:
         model=Product
-        fields=("id","name","slug","category","category_name","short_description","description","image","sale_price","price_type","minimum_quantity","production_days","techniques","customization_options","variants")
+        fields=("id","name","slug","category","category_name","short_description","description","image","images","sale_price","price_type","minimum_quantity","production_days","techniques","customization_options","variants")
 
 class MarketplaceProductSerializer(PublicProductSerializer):
     business=serializers.SerializerMethodField()
@@ -204,6 +225,11 @@ class PublicOrderRequestSerializer(serializers.Serializer):
         if variant_id:
             variant=product.variants.filter(id=variant_id,is_active=True).first()
             if not variant: raise serializers.ValidationError({"variant":"La variante no está disponible."})
+        customizations=data.get("customizations") or {}
+        for option in product.customization_options:
+            key=option.get("key")
+            if option.get("required") and option.get("type")!="file" and not customizations.get(key):raise serializers.ValidationError({"customizations":f"{option.get('label','Campo')} es obligatorio."})
+            if option.get("type")=="select" and customizations.get(key) and customizations[key] not in option.get("choices",[]):raise serializers.ValidationError({"customizations":f"La opción elegida para {option.get('label','campo')} no es válida."})
         data["product_object"]=product;data["variant_object"]=variant
         return data
     @transaction.atomic

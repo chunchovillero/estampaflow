@@ -10,6 +10,10 @@ from operations.models import Conversation,Message,Order,Product,ProductCategory
 
 pytestmark=pytest.mark.django_db
 
+@pytest.fixture(autouse=True)
+def isolate_throttle_cache():
+    cache.clear()
+
 def company(name,email,region="Metropolitana de Santiago",verified=True):
     business=Business.objects.create(name=name,slug=name.lower(),status="active",is_public=True,is_verified=verified,accepts_quotes=True,region=region,national_delivery=True,weekly_capacity=100)
     category=ProductCategory.objects.create(business=business,name="Poleras")
@@ -68,6 +72,7 @@ def test_quote_files_require_token_and_only_reach_matched_businesses():
     upload=SimpleUploadedFile("referencia.pdf",b"%PDF-1.4 demo",content_type="application/pdf")
     endpoint=f"/api/v1/public/quotes/{quote.public_id}/files/"
     assert APIClient().post(endpoint,{"file":upload},format="multipart").status_code==404
+    cache.clear()
     upload=SimpleUploadedFile("referencia.pdf",b"%PDF-1.4 demo",content_type="application/pdf")
     response=APIClient().post(endpoint,{"token":str(quote.access_token),"file":upload},format="multipart")
     item=QuoteFile.objects.get(id=response.data["id"])

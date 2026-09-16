@@ -10,7 +10,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from businesses.models import Business
 from businesses.permissions import HasActiveBusiness, get_membership
-from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,QuoteFile,QuoteProposal,QuoteRequest
+from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductImage,QuoteFile,QuoteProposal,QuoteRequest
 from .serializers import CategorySerializer,CustomerSerializer,DesignApprovalSerializer,MarketplaceProductSerializer,MessageSerializer,NotificationSerializer,OrderFileSerializer,OrderListSerializer,OrderSerializer,PaymentSerializer,ProductSerializer,PublicOrderRequestSerializer,PublicProductSerializer,PublicProposalSerializer,QuoteProposalSerializer,QuoteRequestBusinessSerializer,QuoteRequestCreateSerializer
 from .services import enforce_plan_limit,next_order_number,notify_business,recalculate_order,record_audit,send_event_email
 
@@ -125,7 +125,26 @@ class ProductViewSet(TenantViewSet):
     search_fields=("name","short_description","description")
     ordering_fields=("name","sale_price","created_at","stock")
     filterset_fields=("category","is_active","is_public","price_type")
-    def get_queryset(self): return Product.objects.filter(business=self.business()).select_related("category").prefetch_related("variants")
+    def get_queryset(self): return Product.objects.filter(business=self.business()).select_related("category").prefetch_related("variants","images")
+    @decorators.action(detail=True,methods=["get","post","delete"])
+    def images(self,request,pk=None):
+        product=self.get_object()
+        if request.method=="GET":return response.Response([{"id":item.id,"url":item.image.url,"alt_text":item.alt_text,"position":item.position,"size":item.size} for item in product.images.all()])
+        if request.method=="DELETE":
+            item=product.images.filter(pk=request.data.get("image_id")).first()
+            if not item:return response.Response(status=404)
+            item.image.delete(save=False);item.delete();return response.Response(status=204)
+        upload=request.FILES.get("file")
+        try:name,mime=checked_upload(upload)
+        except ValueError as exc:return response.Response({"error":{"status":400,"details":str(exc)}},status=400)
+        if not mime.startswith("image/"):return response.Response({"error":{"status":400,"details":"La galería sólo acepta imágenes."}},status=400)
+        business=self.business()
+        try:limit=business.subscription.limit("storage_mb")
+        except Exception:limit=None
+        used=ProductImage.objects.filter(business=business).aggregate(value=Sum("size"))["value"] or 0;used+=OrderFile.objects.filter(business=business,is_active=True).aggregate(value=Sum("size"))["value"] or 0;used+=QuoteFile.objects.filter(business=business,is_active=True).aggregate(value=Sum("size"))["value"] or 0
+        if limit is not None and used+upload.size>int(limit)*1024*1024:return response.Response({"error":{"status":400,"details":"El archivo supera el almacenamiento disponible de tu plan."}},status=400)
+        item=ProductImage.objects.create(business=business,product=product,image=upload,alt_text=request.data.get("alt_text") or product.name,position=product.images.count(),size=upload.size)
+        return response.Response({"id":item.id,"url":item.image.url,"alt_text":item.alt_text,"position":item.position,"size":item.size},status=201)
     def perform_destroy(self, instance):
         if instance.order_items.exists(): instance.is_active=False; instance.save(update_fields=["is_active"])
         else: instance.delete()
@@ -177,7 +196,7 @@ class PublicStoreView(APIView):
     def get(self,request,slug,product_slug=None):
         business=self.get_business(slug)
         if not business:return response.Response({"error":{"status":404,"details":"Tienda no encontrada."}},status=404)
-        products=Product.objects.filter(business=business,is_active=True,is_public=True).exclude(moderation_status__in=("rejected","hidden")).select_related("category").prefetch_related("variants")
+        products=Product.objects.filter(business=business,is_active=True,is_public=True).exclude(moderation_status__in=("rejected","hidden")).select_related("category").prefetch_related("variants","images")
         if product_slug:
             product=products.filter(slug=product_slug).first()
             if not product:return response.Response({"error":{"status":404,"details":"Producto no encontrado."}},status=404)
@@ -195,13 +214,28 @@ class PublicOrderRequestView(APIView):
         business=Business.objects.filter(slug=slug,status="active",is_public=True).first()
         if not business:return response.Response({"error":{"status":404,"details":"Tienda no encontrada."}},status=404)
         serializer=PublicOrderRequestSerializer(data=request.data,context={"business":business});serializer.is_valid(raise_exception=True);order=serializer.save()
-        return response.Response({"public_id":order.public_id,"display_number":order.display_number,"status":order.status,"detail":"Solicitud recibida. El emprendimiento revisará tu pedido."},status=201)
+        return response.Response({"public_id":order.public_id,"access_token":order.public_access_token,"display_number":order.display_number,"status":order.status,"detail":"Solicitud recibida. El emprendimiento revisará tu pedido."},status=201)
+
+class PublicOrderFileView(APIView):
+    permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
+    def post(self,request,public_id):
+        order=Order.objects.filter(public_id=public_id,public_access_token=request.data.get("token")).first()
+        if not order:return response.Response(status=404)
+        upload=request.FILES.get("file")
+        try:name,mime=checked_upload(upload)
+        except ValueError as exc:return response.Response({"error":{"status":400,"details":str(exc)}},status=400)
+        try:limit=order.business.subscription.limit("storage_mb")
+        except Exception:limit=None
+        used=ProductImage.objects.filter(business=order.business).aggregate(value=Sum("size"))["value"] or 0;used+=OrderFile.objects.filter(business=order.business,is_active=True).aggregate(value=Sum("size"))["value"] or 0;used+=QuoteFile.objects.filter(business=order.business,is_active=True).aggregate(value=Sum("size"))["value"] or 0
+        if limit is not None and used+upload.size>int(limit)*1024*1024:return response.Response({"error":{"status":400,"details":"El archivo supera el almacenamiento disponible del emprendimiento."}},status=400)
+        item=OrderFile.objects.create(business=order.business,order=order,file=upload,kind="client",original_name=name,mime_type=mime,size=upload.size)
+        return response.Response({"id":item.id,"name":item.original_name},status=201)
 
 class MarketplaceView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[]
     def get(self,request):
         now=timezone.now()
-        products=Product.objects.filter(business__status="active",business__is_public=True,is_active=True,is_public=True,moderation_status="approved").select_related("business","category").prefetch_related("variants")
+        products=Product.objects.filter(business__status="active",business__is_public=True,is_active=True,is_public=True,moderation_status="approved").select_related("business","category").prefetch_related("variants","images")
         q=request.query_params.get("search")
         if q:products=products.filter(Q(name__icontains=q)|Q(short_description__icontains=q)|Q(description__icontains=q)|Q(business__name__icontains=q))
         if request.query_params.get("category"):products=products.filter(category__name__iexact=request.query_params["category"])

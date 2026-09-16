@@ -81,6 +81,7 @@ El marketplace y las cotizaciones aparecen en las fases siguientes descritas en 
 - Mensajería de propuestas preparada con actualización periódica.
 - Plantillas de WhatsApp configurables y accesos rápidos por pedido.
 - Correos transaccionales para solicitudes, propuestas, diseños y notificaciones internas, con transporte SMTP configurable.
+- Galería multiimagen y opciones flexibles de personalización por producto, incluidos archivos protegidos en pedidos públicos.
 - Panel React exclusivo para superadministradores con métricas globales, gestión de empresas y moderación de productos públicos.
 - Auditoría persistente de pedidos, pagos, archivos, diseños, propuestas y acciones de moderación, visible como actividad reciente en el panel de plataforma.
 - Notificaciones internas por usuario y empresa para pedidos públicos, cotizaciones compatibles, propuestas aceptadas y respuestas de diseño.
