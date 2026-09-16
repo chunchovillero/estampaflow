@@ -60,6 +60,8 @@ def test_payment_updates_paid_amount_balance_and_status():
     order=Order.objects.get(id=order_id)
     assert response.status_code==201 and order.total_paid==5000 and order.balance==16000 and order.payment_status=="partial"
     assert AuditLog.objects.filter(action="payment.recorded",business=business,entity_id=str(response.data["id"])).exists()
+    pdf=client.get(f"/api/v1/payments/{response.data['id']}/pdf/")
+    assert pdf.status_code==200 and pdf["Content-Type"]=="application/pdf"
 
 def test_payment_cannot_exceed_pending_balance():
     business,_,client=tenant("Aurora","owner@aurora.cl");_,product,customer=catalog(business)

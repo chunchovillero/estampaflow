@@ -87,6 +87,7 @@ El marketplace y las cotizaciones aparecen en las fases siguientes descritas en 
 - Administración de empresas y productos destacados desde el panel de plataforma, con posición, vigencia, motivo y modalidad pagada preparados en el modelo.
 - Reportes privados por período con ventas, pagos, saldos, ticket promedio, pedidos por estado y productos más vendidos.
 - Consumo del plan visible por empresa y editor exclusivo del superadministrador para precios y límites configurables.
+- Centro de documentos con fichas de producción, propuestas comerciales y comprobantes de pago en PDF.
 
 ## Arquitectura
 

@@ -350,3 +350,31 @@ def order_pdf(request,pk):
     y-=10;pdf.setFont("Helvetica-Bold",12);pdf.drawString(45,y,"Productos");y-=22;pdf.setFont("Helvetica",10)
     for item in order.items.all():pdf.drawString(45,y,f"{item.quantity} x {item.description} - {item.customizations}");y-=18
     pdf.showPage();pdf.save();buffer.seek(0);return FileResponse(buffer,as_attachment=True,filename=f"{order.display_number}.pdf",content_type="application/pdf")
+
+def _pdf_document(title,lines,filename):
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    buffer=BytesIO();pdf=canvas.Canvas(buffer,pagesize=A4);pdf.setTitle(title);y=800;pdf.setFont("Helvetica-Bold",18);pdf.drawString(45,y,title);y-=35;pdf.setFont("Helvetica",10)
+    for line in lines:
+        text=str(line)
+        while len(text)>95:
+            split=text.rfind(" ",0,95);split=split if split>0 else 95;pdf.drawString(45,y,text[:split]);text=text[split:].strip();y-=16
+            if y<60:pdf.showPage();pdf.setFont("Helvetica",10);y=800
+        pdf.drawString(45,y,text);y-=18
+        if y<60:pdf.showPage();pdf.setFont("Helvetica",10);y=800
+    pdf.showPage();pdf.save();buffer.seek(0);return FileResponse(buffer,as_attachment=True,filename=filename,content_type="application/pdf")
+
+@decorators.api_view(["GET"])
+def proposal_pdf(request,pk):
+    business=get_membership(request.user).business;proposal=QuoteProposal.objects.filter(pk=pk,business=business).select_related("request","business").first()
+    if not proposal:return response.Response(status=404)
+    quote=proposal.request;lines=[f"Empresa: {business.name}",f"Solicitud: {quote.title}",f"Cantidad: {quote.quantity}",f"Precio unitario: ${proposal.unit_price:,.0f}",f"Descuento: ${proposal.discount:,.0f}",f"Despacho: ${proposal.shipping_cost:,.0f}",f"TOTAL: ${proposal.total_price:,.0f}",f"Producción: {proposal.production_days} días",f"Entrega estimada: {proposal.estimated_delivery or 'Por confirmar'}",f"Técnica: {proposal.technique or 'Por definir'}",f"Materiales: {proposal.materials or 'Por definir'}",f"Condiciones: {proposal.payment_terms or 'Sin condiciones adicionales'}",f"Abono: {proposal.deposit_percentage}%",f"Válida hasta: {proposal.valid_until}",f"Comentarios: {proposal.comments or 'Sin comentarios'}"]
+    return _pdf_document(f"Propuesta {str(proposal.public_id)[:8].upper()}",lines,f"propuesta-{str(proposal.public_id)[:8]}.pdf")
+
+@decorators.api_view(["GET"])
+def payment_pdf(request,pk):
+    business=get_membership(request.user).business;payment=Payment.objects.filter(pk=pk,business=business,is_void=False).select_related("order__customer","registered_by").first()
+    if not payment:return response.Response(status=404)
+    order=payment.order;lines=[f"Empresa: {business.name}",f"Pedido: {order.display_number}",f"Cliente: {order.customer.full_name}",f"Fecha: {timezone.localtime(payment.paid_at).strftime('%d-%m-%Y %H:%M')}",f"Monto recibido: ${payment.amount:,.0f}",f"Método: {payment.get_method_display()}",f"Referencia: {payment.reference or 'Sin referencia'}",f"Registrado por: {payment.registered_by.get_full_name() or payment.registered_by.email}",f"Total del pedido: ${order.total:,.0f}",f"Saldo actual: ${order.balance:,.0f}",f"Observaciones: {payment.notes or 'Sin observaciones'}"]
+    return _pdf_document(f"Comprobante de pago #{payment.id}",lines,f"comprobante-pago-{payment.id}.pdf")

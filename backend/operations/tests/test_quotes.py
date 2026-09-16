@@ -53,3 +53,7 @@ def test_companies_never_see_competitor_proposals():
     QuoteProposal.objects.create(request=quote,business=first,total_price=240000,unit_price=12000,production_days=7,valid_until=timezone.localdate()+timedelta(days=7),created_by=first_user)
     QuoteProposal.objects.create(request=quote,business=second,total_price=220000,unit_price=11000,production_days=8,valid_until=timezone.localdate()+timedelta(days=7),created_by=second_user)
     assert auth(first_user).get("/api/v1/quote-proposals/").data["count"]==1
+    own=QuoteProposal.objects.get(business=first)
+    pdf=auth(first_user).get(f"/api/v1/quote-proposals/{own.id}/pdf/")
+    assert pdf.status_code==200 and pdf["Content-Type"]=="application/pdf"
+    assert auth(second_user).get(f"/api/v1/quote-proposals/{own.id}/pdf/").status_code==404
