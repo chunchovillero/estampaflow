@@ -67,7 +67,9 @@ class RefreshView(APIView):
             return Response({"error": {"status": 401, "details": "Sesión vencida."}}, status=401)
 
 class LogoutView(APIView):
-    @extend_schema(request=None,responses={204:None})
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    @extend_schema(request=None,responses={204:None},auth=[])
     def post(self, request):
         response = Response(status=status.HTTP_204_NO_CONTENT)
         clear_auth_cookies(response)

@@ -31,6 +31,15 @@ def test_invalid_login_does_not_reveal_account():
     assert response.status_code == 401
     assert response.data["error"]["details"] == "Correo o contraseña incorrectos."
 
+def test_logout_clears_expired_or_anonymous_session_cookies():
+    client = APIClient()
+    client.cookies["access_token"] = "expired"
+    client.cookies["refresh_token"] = "expired"
+    response = client.post("/api/v1/auth/logout/")
+    assert response.status_code == 204
+    assert response.cookies["access_token"].value == ""
+    assert response.cookies["refresh_token"].value == ""
+
 def test_password_reset_confirm_changes_password():
     user = get_user_model().objects.create_user(username="ana@example.cl", email="ana@example.cl", password="Marea-Violeta-4821")
     response = APIClient().post("/api/v1/auth/password-reset/confirm/", {"uid": urlsafe_base64_encode(force_bytes(user.pk)), "token": default_token_generator.make_token(user), "password": "Nueva-Marea-7392"}, format="json")
