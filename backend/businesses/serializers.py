@@ -62,3 +62,14 @@ class BusinessSettingSerializer(serializers.ModelSerializer):
     class Meta:
         model=BusinessSetting
         fields=("order_prefix","whatsapp_templates","payment_methods","delivery_methods")
+
+class TerritorySerializer(serializers.Serializer):
+    region=serializers.CharField();communes=serializers.ListField(child=serializers.CharField())
+class PlanSummarySerializer(serializers.Serializer):
+    id=serializers.IntegerField();code=serializers.CharField();name=serializers.CharField();monthly_price=serializers.DecimalField(max_digits=10,decimal_places=0)
+class CurrentPlanSerializer(serializers.Serializer):
+    plan=PlanSummarySerializer();status=serializers.CharField();limits=serializers.JSONField();usage=serializers.JSONField();ends_at=serializers.DateTimeField(allow_null=True)
+class PlatformPlanSerializer(serializers.Serializer):
+    id=serializers.IntegerField();code=serializers.CharField();name=serializers.CharField();monthly_price=serializers.DecimalField(max_digits=10,decimal_places=0);limits=serializers.JSONField();is_active=serializers.BooleanField();position=serializers.IntegerField();subscriptions=serializers.IntegerField()
+class PlatformPlanUpdateSerializer(serializers.Serializer):
+    name=serializers.CharField(required=False);monthly_price=serializers.DecimalField(max_digits=10,decimal_places=0,required=False);limits=serializers.JSONField(required=False);is_active=serializers.BooleanField(required=False);position=serializers.IntegerField(required=False)

@@ -14,7 +14,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         model=Notification
         fields=("id","kind","title","body","url","is_read","read_at","created_at")
         read_only_fields=fields
-    def get_is_read(self,obj):return bool(obj.read_at)
+    def get_is_read(self,obj)->bool:return bool(obj.read_at)
 
 class CustomerSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
@@ -47,7 +47,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
         model=ProductImage
         fields=("id","url","alt_text","position","size")
         read_only_fields=fields
-    def get_url(self,obj):return obj.image.url
+    def get_url(self,obj)->str:return obj.image.url
 
 class ProductSerializer(serializers.ModelSerializer):
     variants = VariantSerializer(many=True, required=False)
@@ -335,7 +335,7 @@ class OrderFileSerializer(serializers.ModelSerializer):
         model=OrderFile
         fields=("id","order","item","kind","original_name","mime_type","size","download_url","created_at")
         read_only_fields=("id","original_name","mime_type","size","download_url","created_at")
-    def get_download_url(self,obj):return f"/api/v1/order-files/{obj.id}/download/"
+    def get_download_url(self,obj)->str:return f"/api/v1/order-files/{obj.id}/download/"
 
 class DesignApprovalSerializer(serializers.ModelSerializer):
     url=serializers.SerializerMethodField();is_available=serializers.BooleanField(read_only=True)
@@ -343,4 +343,4 @@ class DesignApprovalSerializer(serializers.ModelSerializer):
         model=DesignApproval
         fields=("id","order","token","expires_at","revoked_at","approved_at","approved_by_name","comment","created_at","is_available","url")
         read_only_fields=("id","token","revoked_at","approved_at","approved_by_name","comment","created_at","is_available","url")
-    def get_url(self,obj):return f"/aprobar/{obj.token}"
+    def get_url(self,obj)->str:return f"/aprobar/{obj.token}"

@@ -4,19 +4,23 @@ from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 from .models import BusinessMembership,BusinessSetting,Plan,Subscription
 from .permissions import HasActiveBusiness, IsBusinessOwner, get_membership
-from .serializers import BusinessSerializer,BusinessSettingSerializer,InviteMemberSerializer,MembershipSerializer
+from .serializers import BusinessSerializer,BusinessSettingSerializer,CurrentPlanSerializer,InviteMemberSerializer,MembershipSerializer,PlatformPlanSerializer,PlatformPlanUpdateSerializer,TerritorySerializer
 from .territories import CHILE_TERRITORIES
 
 class TerritoryView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[]
+    @extend_schema(responses=TerritorySerializer(many=True),auth=[])
     def get(self,request):return Response([{"region":region,"communes":communes} for region,communes in CHILE_TERRITORIES.items()])
 
 class CurrentBusinessView(APIView):
     permission_classes = [HasActiveBusiness]
+    @extend_schema(responses=BusinessSerializer)
     def get(self, request):
         return Response(BusinessSerializer(get_membership(request.user).business).data)
+    @extend_schema(request=BusinessSerializer,responses=BusinessSerializer)
     def patch(self, request):
         if get_membership(request.user).role != BusinessMembership.Role.OWNER:
             return Response({"error": {"status": 403, "details": "Solo el propietario puede modificar la empresa."}}, status=403)
@@ -49,13 +53,16 @@ class MemberDetailView(generics.UpdateAPIView):
 class BusinessSettingView(APIView):
     permission_classes=[HasActiveBusiness]
     def get_object(self,request):return BusinessSetting.objects.get_or_create(business=get_membership(request.user).business)[0]
+    @extend_schema(responses=BusinessSettingSerializer)
     def get(self,request):return Response(BusinessSettingSerializer(self.get_object(request)).data)
+    @extend_schema(request=BusinessSettingSerializer,responses=BusinessSettingSerializer)
     def patch(self,request):
         if get_membership(request.user).role!="owner":return Response({"error":{"status":403,"details":"Solo el propietario puede modificar los mensajes."}},status=403)
         serializer=BusinessSettingSerializer(self.get_object(request),data=request.data,partial=True);serializer.is_valid(raise_exception=True);serializer.save();return Response(serializer.data)
 
 class CurrentPlanView(APIView):
     permission_classes=[HasActiveBusiness]
+    @extend_schema(responses=CurrentPlanSerializer)
     def get(self,request):
         from operations.models import Order,OrderFile,Product,QuoteProposal
         business=get_membership(request.user).business
@@ -69,8 +76,10 @@ class CurrentPlanView(APIView):
 class PlatformPlanView(APIView):
     permission_classes=[permissions.IsAdminUser]
     allowed_limits={"orders","public_products","users","storage_mb","quote_responses"}
+    @extend_schema(responses=PlatformPlanSerializer(many=True))
     def get(self,request):
         return Response([{"id":plan.id,"code":plan.code,"name":plan.name,"monthly_price":plan.monthly_price,"limits":plan.limits,"is_active":plan.is_active,"position":plan.position,"subscriptions":plan.subscriptions.count()} for plan in Plan.objects.order_by("position","monthly_price")])
+    @extend_schema(request=PlatformPlanUpdateSerializer,responses=PlatformPlanSerializer)
     def patch(self,request,pk):
         plan=Plan.objects.filter(pk=pk).first()
         if not plan:return Response(status=404)
