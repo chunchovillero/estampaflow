@@ -2,7 +2,7 @@
 
 **Tus pedidos personalizados, bajo control.**
 
-EstampaFlow es un SaaS multiempresa para emprendimientos chilenos de estampado, sublimación, impresión y productos personalizados. El repositorio contiene la base SaaS y la administración interna de la **Fase 2**.
+EstampaFlow es un SaaS multiempresa para emprendimientos chilenos de estampado, sublimación, impresión y productos personalizados. El repositorio contiene el MVP completo: administración multiempresa, tiendas públicas, marketplace, cotizaciones, diseños, comunicación y estabilización.
 
 ## Estado de la Fase 1
 
@@ -20,7 +20,7 @@ Incluye:
 - Interfaz responsive en español y estructura preparada para PWA.
 - Comando de datos de demostración de la Fase 1.
 
-El marketplace y las cotizaciones aparecen en las fases siguientes descritas en el roadmap.
+Las siete fases del MVP están implementadas y verificadas; el roadmap al final separa las ampliaciones posteriores.
 
 ## Estado de la Fase 2
 
@@ -105,7 +105,7 @@ Navegador React ── cookies JWT + CSRF ──> API Django REST ──> Postgr
                               consultas siempre filtradas por empresa
 ```
 
-El modelo `BusinessMembership` relaciona usuarios y empresas y contiene el rol. Los endpoints privados resuelven la empresa desde la membresía autenticada; nunca aceptan `business_id` como autoridad. Los superadministradores usan las capacidades nativas de Django Admin. Los archivos se guardan localmente bajo `MEDIA_ROOT`; los campos `ImageField` permiten migrar más tarde a un storage S3 sin cambiar los modelos.
+El modelo `BusinessMembership` relaciona usuarios y empresas y contiene el rol. Los endpoints privados resuelven la empresa desde la membresía autenticada; nunca aceptan `business_id` como autoridad. Los superadministradores usan las capacidades nativas de Django Admin. Los archivos se guardan localmente bajo `MEDIA_ROOT` en desarrollo. Al configurar `STORAGE_BACKEND=s3`, se usa un bucket privado con URLs firmadas y vencimiento.
 
 ## Inicio rápido con Docker
 
@@ -184,7 +184,7 @@ Estas credenciales son exclusivamente locales. El comando no se ejecuta automát
 - **JWT en cookies HttpOnly:** limita la exposición de tokens a scripts; las escrituras además requieren CSRF.
 - **Una membresía activa por contexto en esta fase:** el modelo permite varias membresías, y una selección explícita de empresa se agregará cuando el producto necesite usuarios multiempresa.
 - **Registro activa la empresa:** permite probar el recorrido completo en el MVP. La moderación `pending/active/suspended/rejected` ya existe para aplicar aprobación cuando entre el panel de plataforma.
-- **Redis diferido:** no hay tareas en segundo plano en la Fase 1; se agregará junto con notificaciones.
+- **Procesamiento asíncrono diferido:** las notificaciones internas están implementadas y el correo usa SMTP de forma síncrona. Redis y Celery se incorporarán cuando el volumen requiera colas y reintentos.
 - **Planes configurables:** los límites viven en la base de datos y el backend valida pedidos mensuales, productos públicos, usuarios y respuestas a cotizaciones. El almacenamiento queda preparado como límite configurable.
 - **PWA preparada:** el frontend incluye manifiesto instalable y un service worker básico para cargar la interfaz cuando falla la red.
 - **Archivos locales o S3:** desarrollo usa el volumen local. Con `STORAGE_BACKEND=s3`, Django guarda archivos en un bucket privado y genera URLs firmadas con vencimiento.
