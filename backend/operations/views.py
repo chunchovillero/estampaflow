@@ -8,6 +8,8 @@ from django.utils.dateparse import parse_date
 from rest_framework import decorators, permissions, response, status, viewsets
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from businesses.models import Business
 from businesses.permissions import HasActiveBusiness, get_membership
 from .models import AuditLog,Conversation,Customer,DesignApproval,DesignChangeRequest,FeaturedBusiness,FeaturedProduct,Message,Notification,Order,OrderFile,OrderItem,OrderStatusHistory,Payment,Product,ProductCategory,ProductImage,QuoteFile,QuoteProposal,QuoteRequest
@@ -25,12 +27,14 @@ def checked_upload(upload):
     if not valid:raise ValueError("El contenido no coincide con el tipo declarado.")
     return os.path.basename(upload.name),expected
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT))
 class PlatformDashboardView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):
         recent=AuditLog.objects.select_related("business","actor")[:20]
         return response.Response({"businesses":Business.objects.count(),"active_businesses":Business.objects.filter(status="active").count(),"verified_businesses":Business.objects.filter(is_verified=True).count(),"users":User.objects.count(),"public_products":Product.objects.filter(is_public=True).count(),"pending_products":Product.objects.filter(is_public=True,moderation_status="pending").count(),"quote_requests":QuoteRequest.objects.count(),"proposals":QuoteProposal.objects.count(),"orders":Order.objects.count(),"accepted_quotes":QuoteRequest.objects.filter(status="accepted").count(),"recent_activity":[{"id":log.id,"action":log.action,"entity_type":log.entity_type,"entity_id":log.entity_id,"business":log.business.name if log.business else "Plataforma","actor":log.actor.email if log.actor else "Cliente público","metadata":log.metadata,"created_at":log.created_at} for log in recent]})
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT),patch=extend_schema(request=OpenApiTypes.OBJECT,responses=OpenApiTypes.OBJECT))
 class PlatformBusinessView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):
@@ -49,6 +53,7 @@ class PlatformBusinessView(APIView):
         record_audit("platform.business_updated",business,business=business,actor=request.user,request=request,metadata={"status":business.status,"verified":business.is_verified,"public":business.is_public})
         return response.Response({"id":business.id,"status":business.status,"is_verified":business.is_verified,"is_public":business.is_public})
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT),patch=extend_schema(request=OpenApiTypes.OBJECT,responses=OpenApiTypes.OBJECT))
 class PlatformProductView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):
@@ -64,6 +69,7 @@ class PlatformProductView(APIView):
         record_audit("platform.product_moderated",product,actor=request.user,request=request,metadata={"status":value})
         return response.Response({"id":product.id,"moderation_status":product.moderation_status})
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT),patch=extend_schema(request=OpenApiTypes.OBJECT,responses=OpenApiTypes.OBJECT))
 class PlatformUserView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):
@@ -77,6 +83,7 @@ class PlatformUserView(APIView):
         record_audit("platform.user_updated",user,actor=request.user,request=request,metadata={"is_active":user.is_active})
         return response.Response({"id":user.id,"is_active":user.is_active})
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT),patch=extend_schema(request=OpenApiTypes.OBJECT,responses=OpenApiTypes.OBJECT))
 class PlatformSubscriptionView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):
@@ -98,6 +105,7 @@ class PlatformSubscriptionView(APIView):
         item.save(update_fields=["plan","status"]);record_audit("platform.subscription_updated",item,business=item.business,actor=request.user,request=request,metadata={"plan":item.plan_id,"status":item.status})
         return response.Response({"id":item.id,"plan_id":item.plan_id,"status":item.status})
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT),patch=extend_schema(request=OpenApiTypes.OBJECT,responses=OpenApiTypes.OBJECT))
 class PlatformQuoteView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):
@@ -111,6 +119,7 @@ class PlatformQuoteView(APIView):
         item.status=request.data["status"];item.save(update_fields=["status","updated_at"]);record_audit("platform.quote_moderated",item,actor=request.user,request=request,metadata={"status":item.status})
         return response.Response({"id":item.id,"status":item.status})
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT),post=extend_schema(request=OpenApiTypes.OBJECT,responses=OpenApiTypes.OBJECT))
 class PlatformFeaturedView(APIView):
     permission_classes=[permissions.IsAdminUser]
     def get(self,request):
@@ -220,6 +229,7 @@ class PaymentViewSet(TenantViewSet):
         from .services import recalculate_order
         instance.is_void=True;instance.save(update_fields=["is_void"]);recalculate_order(instance.order)
 
+@extend_schema(responses=OpenApiTypes.OBJECT)
 @decorators.api_view(["GET"])
 def dashboard(request):
     membership=get_membership(request.user)
@@ -228,6 +238,7 @@ def dashboard(request):
     values={"new":orders.filter(status="new").count(),"overdue":orders.filter(due_date__lt=today).exclude(status__in=("delivered","cancelled")).count(),"due_today":orders.filter(due_date=today).exclude(status__in=("delivered","cancelled")).count(),"waiting_approval":orders.filter(status="waiting_approval").count(),"production":orders.filter(status="production").count(),"ready":orders.filter(status="ready").count(),"pending_balance":orders.aggregate(v=Sum("balance"))["v"] or 0,"monthly_sales":orders.filter(created_at__date__gte=month).exclude(status="cancelled").aggregate(v=Sum("total"))["v"] or 0,"monthly_payments":Payment.objects.filter(business=membership.business,paid_at__date__gte=month,is_void=False).aggregate(v=Sum("amount"))["v"] or 0}
     return response.Response(values)
 
+@extend_schema(responses=OpenApiTypes.OBJECT)
 @decorators.api_view(["GET"])
 def reports(request):
     membership=get_membership(request.user)
@@ -242,6 +253,7 @@ def reports(request):
     by_status=orders.values("status").annotate(count=Count("id")).order_by("status")
     return response.Response({"from":date_from,"to":date_to,"sales":sales,"payments":payments.aggregate(value=Sum("amount"))["value"] or 0,"pending_balance":orders.aggregate(value=Sum("balance"))["value"] or 0,"orders":orders.count(),"average_ticket":sales/orders.count() if orders.exists() else 0,"daily":list(daily),"by_status":list(by_status),"top_products":[{"name":item["product__name"] or item["description"],"quantity":item["quantity"]} for item in top_items]})
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT,auth=[]))
 class PublicStoreView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[]
     def get_business(self,slug): return Business.objects.filter(slug=slug,status="active",is_public=True).first()
@@ -260,6 +272,7 @@ class PublicStoreView(APIView):
     @staticmethod
     def business_data(b):return {"name":b.name,"slug":b.slug,"description":b.description,"logo":b.logo.url if b.logo else None,"banner":b.banner.url if b.banner else None,"primary_color":b.primary_color,"secondary_color":b.secondary_color,"whatsapp":b.whatsapp,"instagram":b.instagram,"region":b.region,"commune":b.commune,"allows_pickup":b.allows_pickup,"local_delivery":b.local_delivery,"national_delivery":b.national_delivery,"average_response_hours":b.average_response_hours}
 
+@extend_schema_view(post=extend_schema(request=PublicOrderRequestSerializer,responses={201:OpenApiTypes.OBJECT},auth=[]))
 class PublicOrderRequestView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     def post(self,request,slug):
@@ -268,6 +281,7 @@ class PublicOrderRequestView(APIView):
         serializer=PublicOrderRequestSerializer(data=request.data,context={"business":business});serializer.is_valid(raise_exception=True);order=serializer.save()
         return response.Response({"public_id":order.public_id,"access_token":order.public_access_token,"display_number":order.display_number,"status":order.status,"detail":"Solicitud recibida. El emprendimiento revisará tu pedido."},status=201)
 
+@extend_schema_view(post=extend_schema(request=OpenApiTypes.OBJECT,responses={201:OpenApiTypes.OBJECT},auth=[]))
 class PublicOrderFileView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     def post(self,request,public_id):
@@ -283,6 +297,7 @@ class PublicOrderFileView(APIView):
         item=OrderFile.objects.create(business=order.business,order=order,file=upload,kind="client",original_name=name,mime_type=mime,size=upload.size)
         return response.Response({"id":item.id,"name":item.original_name},status=201)
 
+@extend_schema_view(get=extend_schema(responses=OpenApiTypes.OBJECT,auth=[]))
 class MarketplaceView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[]
     def get(self,request):
@@ -306,6 +321,10 @@ class MarketplaceView(APIView):
         regions=list(Business.objects.filter(product__in=products).exclude(region="").values_list("region",flat=True).distinct().order_by("region"))
         return response.Response({"products":MarketplaceProductSerializer(products[:60],many=True,context={"request":request}).data,"featured_products":MarketplaceProductSerializer(featured_products,many=True,context={"request":request}).data,"featured_businesses":[PublicStoreView.business_data(b) for b in businesses],"categories":categories,"regions":regions})
 
+@extend_schema_view(
+    get=extend_schema(responses=OpenApiTypes.OBJECT,auth=[]),
+    post=extend_schema(request=QuoteRequestCreateSerializer,responses={201:OpenApiTypes.OBJECT},auth=[]),
+)
 class PublicQuoteRequestView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     def post(self,request):
@@ -319,6 +338,10 @@ class PublicQuoteRequestView(APIView):
         Message.objects.filter(conversation__proposal__request=quote,sender_type="business",is_read=False).update(is_read=True)
         return response.Response({"public_id":quote.public_id,"title":quote.title,"category":quote.category,"description":quote.description,"quantity":quote.quantity,"required_date":quote.required_date,"region":quote.region,"commune":quote.commune,"status":quote.status,"proposals":PublicProposalSerializer(proposals,many=True).data})
 
+@extend_schema_view(
+    get=extend_schema(responses={200:OpenApiTypes.BINARY},auth=[]),
+    post=extend_schema(request=OpenApiTypes.OBJECT,responses={201:OpenApiTypes.OBJECT},auth=[]),
+)
 class PublicQuoteFileView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     def quote(self,request,public_id):return QuoteRequest.objects.filter(public_id=public_id,access_token=request.query_params.get("token") or request.data.get("token")).first()
@@ -343,6 +366,10 @@ class PublicQuoteFileView(APIView):
         item=QuoteFile.objects.create(request=quote,proposal=proposal,file=upload,original_name=name,mime_type=mime,size=upload.size,sender_type="client")
         return response.Response({"id":item.id,"name":item.original_name},status=201)
 
+@extend_schema_view(
+    get=extend_schema(responses={200:OpenApiTypes.BINARY}),
+    post=extend_schema(request=OpenApiTypes.OBJECT,responses={201:OpenApiTypes.OBJECT}),
+)
 class BusinessQuoteFileView(APIView):
     permission_classes=[HasActiveBusiness]
     def queryset(self,request):
@@ -393,6 +420,9 @@ class QuoteProposalViewSet(viewsets.ModelViewSet):
             serializer.save(conversation=conversation,sender_type="business",sender_user=request.user,file=file)
         return response.Response(MessageSerializer(conversation.messages.all(),many=True).data)
 
+@extend_schema_view(
+    post=extend_schema(request=MessageSerializer,responses=MessageSerializer(many=True),auth=[]),
+)
 class PublicQuoteMessageView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     def post(self,request,public_id,proposal_id):
@@ -405,6 +435,7 @@ class PublicQuoteMessageView(APIView):
         serializer.save(conversation=conversation,sender_type="client",file=file)
         return response.Response(serializer.data,status=201)
 
+@extend_schema_view(post=extend_schema(request=None,responses=OpenApiTypes.OBJECT,auth=[]))
 class AcceptProposalView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     @transaction.atomic
@@ -473,6 +504,10 @@ class DesignApprovalViewSet(viewsets.ReadOnlyModelViewSet):
     def revoke(self,request,pk=None):
         approval=self.get_object();approval.revoked_at=timezone.now();approval.save(update_fields=["revoked_at"]);record_audit("design.approval_link_revoked",approval,business=approval.order.business,actor=request.user,request=request);return response.Response(DesignApprovalSerializer(approval).data)
 
+@extend_schema_view(
+    get=extend_schema(responses=OpenApiTypes.OBJECT,auth=[]),
+    post=extend_schema(request=OpenApiTypes.OBJECT,responses=OpenApiTypes.OBJECT,auth=[]),
+)
 class PublicApprovalView(APIView):
     permission_classes=[permissions.AllowAny];authentication_classes=[];throttle_classes=[ScopedRateThrottle];throttle_scope="public_order"
     def get_object(self,token):return DesignApproval.objects.filter(token=token).select_related("order__customer","order__business").prefetch_related("order__items","order__files","change_requests").first()
@@ -497,6 +532,7 @@ class PublicApprovalView(APIView):
         return response.Response({"detail":"Respuesta registrada correctamente."})
     def file(self,request,token,file_id):pass
 
+@extend_schema(responses={200:OpenApiTypes.BINARY},auth=[])
 @decorators.api_view(["GET"])
 @decorators.permission_classes([permissions.AllowAny])
 def public_approval_file(request,token,file_id):
@@ -505,6 +541,7 @@ def public_approval_file(request,token,file_id):
     if not obj:return response.Response(status=404)
     return FileResponse(obj.file.open("rb"),content_type=obj.mime_type,filename=obj.original_name)
 
+@extend_schema(responses={200:OpenApiTypes.BINARY})
 @decorators.api_view(["GET"])
 def order_pdf(request,pk):
     from io import BytesIO
@@ -532,6 +569,7 @@ def _pdf_document(title,lines,filename):
         if y<60:pdf.showPage();pdf.setFont("Helvetica",10);y=800
     pdf.showPage();pdf.save();buffer.seek(0);return FileResponse(buffer,as_attachment=True,filename=filename,content_type="application/pdf")
 
+@extend_schema(responses={200:OpenApiTypes.BINARY})
 @decorators.api_view(["GET"])
 def proposal_pdf(request,pk):
     business=get_membership(request.user).business;proposal=QuoteProposal.objects.filter(pk=pk,business=business).select_related("request","business").first()
@@ -539,6 +577,7 @@ def proposal_pdf(request,pk):
     quote=proposal.request;lines=[f"Empresa: {business.name}",f"Solicitud: {quote.title}",f"Cantidad: {quote.quantity}",f"Precio unitario: ${proposal.unit_price:,.0f}",f"Descuento: ${proposal.discount:,.0f}",f"Despacho: ${proposal.shipping_cost:,.0f}",f"TOTAL: ${proposal.total_price:,.0f}",f"Producción: {proposal.production_days} días",f"Entrega estimada: {proposal.estimated_delivery or 'Por confirmar'}",f"Técnica: {proposal.technique or 'Por definir'}",f"Materiales: {proposal.materials or 'Por definir'}",f"Condiciones: {proposal.payment_terms or 'Sin condiciones adicionales'}",f"Abono: {proposal.deposit_percentage}%",f"Válida hasta: {proposal.valid_until}",f"Comentarios: {proposal.comments or 'Sin comentarios'}"]
     return _pdf_document(f"Propuesta {str(proposal.public_id)[:8].upper()}",lines,f"propuesta-{str(proposal.public_id)[:8]}.pdf")
 
+@extend_schema(responses={200:OpenApiTypes.BINARY})
 @decorators.api_view(["GET"])
 def payment_pdf(request,pk):
     business=get_membership(request.user).business;payment=Payment.objects.filter(pk=pk,business=business,is_void=False).select_related("order__customer","registered_by").first()

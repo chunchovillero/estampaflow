@@ -288,7 +288,7 @@ class QuoteProposalSerializer(serializers.ModelSerializer):
         business=get_membership(self.context["request"].user).business
         if not value.matches.filter(business=business,is_active=True).exists():raise serializers.ValidationError("Esta solicitud no fue asignada a tu empresa.")
         return value
-    def get_messages(self,obj):
+    def get_messages(self,obj)->list[dict]:
         if hasattr(obj,"conversation"):
             obj.conversation.messages.filter(sender_type="client",is_read=False).update(is_read=True)
             return MessageSerializer(obj.conversation.messages.all(),many=True).data
@@ -316,7 +316,7 @@ class MessageSerializer(serializers.ModelSerializer):
         model=Message
         fields=("id","sender_type","body","attachment","is_read","created_at")
         read_only_fields=("id","sender_type","attachment","is_read","created_at")
-    def get_attachment(self,obj):
+    def get_attachment(self,obj)->dict|None:
         if not obj.file:return None
         return {"id":obj.file_id,"name":obj.file.original_name,"size":obj.file.size}
 
