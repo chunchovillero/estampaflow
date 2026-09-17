@@ -169,6 +169,18 @@ docker compose run --rm frontend npm run build
 
 GitHub Actions ejecuta migraciones, las pruebas del backend, la validación de OpenAPI y la compilación del frontend en cada push a `main` y en cada pull request. Swagger documenta la cookie HttpOnly `access_token` como `cookieJWT` y el encabezado CSRF requerido para escrituras.
 
+## Ejecución en producción
+
+El archivo `docker-compose.prod.yml` usa Gunicorn para Django y Nginx para servir el frontend compilado y los estáticos. La API queda accesible bajo el mismo dominio en `/api/`, evitando configuraciones CORS adicionales. El ejemplo exige almacenamiento S3 privado para mantener las descargas protegidas mediante URLs firmadas.
+
+```bash
+cp .env.production.example .env.production
+# Edita todas las claves, dominios, correo y almacenamiento.
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+El contenedor del backend ejecuta migraciones y `collectstatic` antes de iniciar Gunicorn. Expón el puerto HTTP mediante un proxy o balanceador con HTTPS y activa HSTS solamente cuando todo el dominio funcione permanentemente bajo HTTPS.
+
 ## Credenciales de demostración
 
 Se crean solo al ejecutar `seed_demo`:
