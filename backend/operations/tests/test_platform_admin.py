@@ -21,6 +21,13 @@ def test_platform_endpoints_are_superadmin_only():
     assert authenticated(owner).get("/api/v1/platform/subscriptions/").status_code==403
     assert authenticated(owner).get("/api/v1/platform/quotes/").status_code==403
 
+def test_platform_collection_and_detail_routes_reject_unintended_methods():
+    admin=User.objects.create_superuser(username="admin-methods@test.cl",email="admin-methods@test.cl",password="Marea-Violeta-4821")
+    business=Business.objects.create(name="Rutas seguras",status="active")
+    client=authenticated(admin)
+    assert client.patch("/api/v1/platform/businesses/",{},format="json").status_code==405
+    assert client.get(f"/api/v1/platform/businesses/{business.id}/").status_code==405
+
 def test_superadmin_manages_users_subscriptions_and_quotes_without_contact_data():
     admin=User.objects.create_superuser(username="admin-ops@test.cl",email="admin-ops@test.cl",password="Marea-Violeta-4821")
     business=Business.objects.create(name="Aurora",status="active");owner=User.objects.create_user(username="ops@test.cl",email="ops@test.cl",password="Marea-Violeta-4821");BusinessMembership.objects.create(business=business,user=owner,role="owner")

@@ -366,6 +366,10 @@ class PublicQuoteFileView(APIView):
         item=QuoteFile.objects.create(request=quote,proposal=proposal,file=upload,original_name=name,mime_type=mime,size=upload.size,sender_type="client")
         return response.Response({"id":item.id,"name":item.original_name},status=201)
 
+@extend_schema_view(get=extend_schema(operation_id="public_quote_file_download",responses={200:OpenApiTypes.BINARY},auth=[]))
+class PublicQuoteFileDownloadView(PublicQuoteFileView):
+    http_method_names=["get","head","options"]
+
 @extend_schema_view(
     get=extend_schema(responses={200:OpenApiTypes.BINARY}),
     post=extend_schema(request=OpenApiTypes.OBJECT,responses={201:OpenApiTypes.OBJECT}),
@@ -394,6 +398,10 @@ class BusinessQuoteFileView(APIView):
         if limit is not None and used+upload.size>int(limit)*1024*1024:return response.Response({"error":{"status":400,"details":"El archivo supera el almacenamiento disponible de tu plan."}},status=400)
         item=QuoteFile.objects.create(request=proposal.request,proposal=proposal,business=business,file=upload,original_name=name,mime_type=mime,size=upload.size,sender_type="business",uploaded_by=request.user)
         return response.Response({"id":item.id,"name":item.original_name},status=201)
+
+@extend_schema_view(get=extend_schema(operation_id="business_quote_file_download",responses={200:OpenApiTypes.BINARY}))
+class BusinessQuoteFileDownloadView(BusinessQuoteFileView):
+    http_method_names=["get","head","options"]
 
 class AvailableQuoteViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes=[HasActiveBusiness];serializer_class=QuoteRequestBusinessSerializer

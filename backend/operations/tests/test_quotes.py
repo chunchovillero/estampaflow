@@ -1,4 +1,5 @@
 from datetime import timedelta
+from uuid import uuid4
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -32,6 +33,11 @@ def test_deterministic_matching_excludes_unverified_business():
     quote=QuoteRequest.objects.get(public_id=response.data["public_id"])
     assert response.status_code==201 and response.data["matches"]==1
     assert quote.matches.get().business==eligible
+
+def test_public_quote_detail_routes_reject_creation_methods():
+    public_id=uuid4()
+    assert APIClient().post(f"/api/v1/public/quotes/{public_id}/",quote_payload(),format="json").status_code==405
+    assert APIClient().post(f"/api/v1/public/quotes/{public_id}/files/99/",{},format="json").status_code==405
 
 def test_chilean_territory_catalog_and_location_validation():
     territories=APIClient().get("/api/v1/businesses/territories/")
