@@ -109,6 +109,8 @@ El modelo `BusinessMembership` relaciona usuarios y empresas y contiene el rol. 
 
 ## Inicio rápido con Docker
 
+Docker comprueba PostgreSQL y el endpoint `/api/health/` antes de considerar listo el backend. El frontend comienza cuando la API ya responde correctamente.
+
 1. Copia `.env.example` como `.env` y cambia las claves de ejemplo.
 2. Inicia los servicios:
 
