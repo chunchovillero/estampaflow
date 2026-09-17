@@ -30,6 +30,7 @@ class MemberListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsBusinessOwner]
     serializer_class = MembershipSerializer
     def get_queryset(self):
+        if getattr(self,"swagger_fake_view",False):return BusinessMembership.objects.none()
         return BusinessMembership.objects.select_related("user").filter(business=get_membership(self.request.user).business)
     def create(self, request, *args, **kwargs):
         serializer = InviteMemberSerializer(data=request.data, context={"business": get_membership(request.user).business})
@@ -42,6 +43,7 @@ class MemberDetailView(generics.UpdateAPIView):
     serializer_class = MembershipSerializer
     http_method_names = ["patch"]
     def get_queryset(self):
+        if getattr(self,"swagger_fake_view",False):return BusinessMembership.objects.none()
         return BusinessMembership.objects.filter(business=get_membership(self.request.user).business).exclude(user=self.request.user)
 
 class BusinessSettingView(APIView):

@@ -137,12 +137,17 @@ class PlatformFeaturedView(APIView):
 
 class TenantViewSet(viewsets.ModelViewSet):
     permission_classes=[HasActiveBusiness]
-    def business(self): return get_membership(self.request.user).business
+    def business(self):
+        if getattr(self,"swagger_fake_view",False):return None
+        membership=get_membership(self.request.user)
+        return membership.business if membership else None
     def perform_create(self, serializer): serializer.save(business=self.business())
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes=[HasActiveBusiness];serializer_class=NotificationSerializer
-    def get_queryset(self):return Notification.objects.filter(recipient=self.request.user,business=get_membership(self.request.user).business)
+    def get_queryset(self):
+        if getattr(self,"swagger_fake_view",False):return Notification.objects.none()
+        return Notification.objects.filter(recipient=self.request.user,business=get_membership(self.request.user).business)
     @decorators.action(detail=True,methods=["post"])
     def read(self,request,pk=None):
         item=self.get_object()
@@ -366,13 +371,16 @@ class BusinessQuoteFileView(APIView):
 class AvailableQuoteViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes=[HasActiveBusiness];serializer_class=QuoteRequestBusinessSerializer
     def get_queryset(self):
+        if getattr(self,"swagger_fake_view",False):return QuoteRequest.objects.none()
         business=get_membership(self.request.user).business
         return QuoteRequest.objects.filter(matches__business=business,matches__is_active=True,status__in=("open","proposals")).annotate(match_score=Sum("matches__score")).distinct().order_by("-created_at")
 
 class QuoteProposalViewSet(viewsets.ModelViewSet):
     permission_classes=[HasActiveBusiness];serializer_class=QuoteProposalSerializer
     http_method_names=["get","post","patch","head","options"]
-    def get_queryset(self):return QuoteProposal.objects.filter(business=get_membership(self.request.user).business).select_related("request","business").prefetch_related("conversation__messages")
+    def get_queryset(self):
+        if getattr(self,"swagger_fake_view",False):return QuoteProposal.objects.none()
+        return QuoteProposal.objects.filter(business=get_membership(self.request.user).business).select_related("request","business").prefetch_related("conversation__messages")
     @decorators.action(detail=True,methods=["get","post"])
     def messages(self,request,pk=None):
         proposal=self.get_object();conversation,_=Conversation.objects.get_or_create(proposal=proposal)
@@ -422,7 +430,9 @@ ALLOWED_FILES={".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".web
 MAX_FILE_SIZE=10*1024*1024
 class OrderFileViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes=[HasActiveBusiness];serializer_class=OrderFileSerializer
-    def get_queryset(self):return OrderFile.objects.filter(business=get_membership(self.request.user).business,is_active=True)
+    def get_queryset(self):
+        if getattr(self,"swagger_fake_view",False):return OrderFile.objects.none()
+        return OrderFile.objects.filter(business=get_membership(self.request.user).business,is_active=True)
     def create(self,request):
         import os
         business=get_membership(request.user).business;upload=request.FILES.get("file");order=Order.objects.filter(id=request.data.get("order"),business=business).first()
@@ -447,7 +457,9 @@ class OrderFileViewSet(viewsets.ReadOnlyModelViewSet):
 
 class DesignApprovalViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes=[HasActiveBusiness];serializer_class=DesignApprovalSerializer
-    def get_queryset(self):return DesignApproval.objects.filter(order__business=get_membership(self.request.user).business)
+    def get_queryset(self):
+        if getattr(self,"swagger_fake_view",False):return DesignApproval.objects.none()
+        return DesignApproval.objects.filter(order__business=get_membership(self.request.user).business)
     def create(self,request):
         order=Order.objects.filter(id=request.data.get("order"),business=get_membership(request.user).business).first()
         if not order:return response.Response(status=404)

@@ -85,4 +85,4 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"public_order": "20/hour"},
 }
 SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(minutes=15), "REFRESH_TOKEN_LIFETIME": timedelta(days=7), "ROTATE_REFRESH_TOKENS": True, "BLACKLIST_AFTER_ROTATION": False}
-SPECTACULAR_SETTINGS = {"TITLE": "EstampaFlow API", "DESCRIPTION": "API multiempresa de EstampaFlow", "VERSION": "1.0.0", "SERVE_INCLUDE_SCHEMA": False}
+SPECTACULAR_SETTINGS = {"TITLE": "EstampaFlow API", "DESCRIPTION": "API multiempresa de EstampaFlow. La autenticación privada usa JWT en cookies HttpOnly y CSRF para escrituras.", "VERSION": "1.0.0", "SERVE_INCLUDE_SCHEMA": False, "COMPONENT_SPLIT_REQUEST": True}

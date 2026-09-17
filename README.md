@@ -165,7 +165,7 @@ docker compose run --rm backend python manage.py seed_demo
 docker compose run --rm frontend npm run build
 ```
 
-GitHub Actions ejecuta migraciones, las pruebas del backend y la compilación del frontend en cada push a `main` y en cada pull request.
+GitHub Actions ejecuta migraciones, las pruebas del backend, la validación de OpenAPI y la compilación del frontend en cada push a `main` y en cada pull request. Swagger documenta la cookie HttpOnly `access_token` como `cookieJWT` y el encabezado CSRF requerido para escrituras.
 
 ## Credenciales de demostración
 
