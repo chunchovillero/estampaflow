@@ -7,18 +7,21 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from drf_spectacular.utils import extend_schema
 from .authentication import clear_auth_cookies, set_auth_cookies
-from .serializers import ChangePasswordSerializer, ProfileUpdateSerializer, RegisterSerializer, UserSerializer
+from .serializers import AuthResponseSerializer,ChangePasswordSerializer,CsrfSerializer,DetailSerializer,EmailSerializer,LoginSerializer,PasswordResetConfirmSerializer,ProfileUpdateSerializer,RegisterSerializer,TokenSerializer,UserSerializer
 
 class CsrfView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    @extend_schema(responses=CsrfSerializer,auth=[])
     def get(self, request):
         return Response({"csrfToken": get_token(request)})
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    @extend_schema(request=RegisterSerializer,responses={201:AuthResponseSerializer},auth=[])
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -34,6 +37,7 @@ class RegisterView(APIView):
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    @extend_schema(request=LoginSerializer,responses={200:AuthResponseSerializer},auth=[])
     def post(self, request):
         user = authenticate(request, email=request.data.get("email", "").lower().strip(), password=request.data.get("password"))
         if not user or not user.is_active:
@@ -49,6 +53,7 @@ class LoginView(APIView):
 class RefreshView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    @extend_schema(request=None,responses=DetailSerializer,auth=[])
     def post(self, request):
         token = request.COOKIES.get("refresh_token")
         if not token:
@@ -62,14 +67,17 @@ class RefreshView(APIView):
             return Response({"error": {"status": 401, "details": "Sesión vencida."}}, status=401)
 
 class LogoutView(APIView):
+    @extend_schema(request=None,responses={204:None})
     def post(self, request):
         response = Response(status=status.HTTP_204_NO_CONTENT)
         clear_auth_cookies(response)
         return response
 
 class ProfileView(APIView):
+    @extend_schema(responses=UserSerializer)
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+    @extend_schema(request=ProfileUpdateSerializer,responses=UserSerializer)
     def patch(self, request):
         serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -77,6 +85,7 @@ class ProfileView(APIView):
         return Response(UserSerializer(request.user).data)
 
 class ChangePasswordView(APIView):
+    @extend_schema(request=ChangePasswordSerializer,responses=DetailSerializer)
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -87,6 +96,7 @@ class ChangePasswordView(APIView):
 class PasswordResetRequestView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    @extend_schema(request=EmailSerializer,responses=DetailSerializer,auth=[])
     def post(self, request):
         from django.contrib.auth import get_user_model
         user = get_user_model().objects.filter(email=request.data.get("email", "").lower().strip()).first()
@@ -99,6 +109,7 @@ class PasswordResetRequestView(APIView):
 class PasswordResetConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    @extend_schema(request=PasswordResetConfirmSerializer,responses=DetailSerializer,auth=[])
     def post(self, request):
         from django.contrib.auth import get_user_model, password_validation
         try:
@@ -119,6 +130,7 @@ class PasswordResetConfirmView(APIView):
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    @extend_schema(request=TokenSerializer,responses=DetailSerializer,auth=[])
     def post(self, request):
         from django.contrib.auth import get_user_model
         try:

@@ -1,4 +1,5 @@
 import pytest
+import yaml
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
@@ -43,3 +44,12 @@ def test_email_verification_marks_user_as_verified():
     user.refresh_from_db()
     assert response.status_code == 200
     assert user.email_verified is True
+
+def test_openapi_documents_cookie_auth_and_authentication_payloads():
+    response=APIClient().get("/api/schema/")
+    schema=yaml.safe_load(response.content)
+    assert response.status_code==200
+    assert schema["components"]["securitySchemes"]["cookieJWT"]["in"]=="cookie"
+    assert "requestBody" in schema["paths"]["/api/v1/auth/register/"]["post"]
+    assert "requestBody" in schema["paths"]["/api/v1/auth/login/"]["post"]
+    assert schema["paths"]["/api/v1/auth/profile/"]["get"]["security"]==[{"cookieJWT":[]}]

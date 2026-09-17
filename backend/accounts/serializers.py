@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model, password_validation
 from django.db import transaction
 from rest_framework import serializers
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from businesses.models import Business,BusinessMembership,Plan,Subscription
 from businesses.validators import normalize_chilean_phone
 
@@ -14,9 +16,11 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ("id", "email", "first_name", "last_name", "phone", "email_verified", "is_superuser", "role", "business")
     def _membership(self, obj):
         return obj.memberships.select_related("business").filter(is_active=True).first()
+    @extend_schema_field(OpenApiTypes.STR)
     def get_role(self, obj):
         membership = self._membership(obj)
         return membership.role if membership else ("superadmin" if obj.is_superuser else None)
+    @extend_schema_field(OpenApiTypes.OBJECT)
     def get_business(self, obj):
         membership = self._membership(obj)
         return {"id": membership.business_id, "name": membership.business.name, "slug": membership.business.slug} if membership else None
@@ -65,3 +69,12 @@ class ChangePasswordSerializer(serializers.Serializer):
     def validate_new_password(self, value):
         password_validation.validate_password(value, self.context["request"].user)
         return value
+
+class LoginSerializer(serializers.Serializer):
+    email=serializers.EmailField();password=serializers.CharField(write_only=True)
+class EmailSerializer(serializers.Serializer):email=serializers.EmailField()
+class TokenSerializer(serializers.Serializer):uid=serializers.CharField();token=serializers.CharField()
+class PasswordResetConfirmSerializer(TokenSerializer):password=serializers.CharField(write_only=True)
+class DetailSerializer(serializers.Serializer):detail=serializers.CharField()
+class CsrfSerializer(serializers.Serializer):csrfToken=serializers.CharField()
+class AuthResponseSerializer(serializers.Serializer):user=UserSerializer()
