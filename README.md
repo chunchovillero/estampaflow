@@ -150,6 +150,7 @@ Las migraciones se ejecutan automáticamente al iniciar el backend.
 | `AWS_QUERYSTRING_EXPIRE` | Duración de las URLs firmadas; 900 segundos por defecto |
 | `DJANGO_SECURE_SSL_REDIRECT`, `DJANGO_COOKIE_SECURE` | Deben ser `true` detrás de HTTPS en producción |
 | `DJANGO_HSTS_SECONDS` | HSTS; habilitar después de confirmar HTTPS en todo el dominio |
+| `LOG_LEVEL` | Nivel de logs del backend: `DEBUG`, `INFO`, `WARNING`, `ERROR` o `CRITICAL` |
 
 ## Comandos de desarrollo
 
