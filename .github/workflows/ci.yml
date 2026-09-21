@@ -35,6 +35,13 @@ jobs:
         working-directory: backend
       - run: python backend/manage.py makemigrations --check --dry-run
       - run: python backend/manage.py spectacular --file schema.yml --validate
+      - name: Validar configuracion segura de produccion
+        run: python backend/manage.py check --deploy --fail-level WARNING
+        env:
+          DJANGO_SECRET_KEY: ci-security-check-key-with-more-than-50-unique-characters-2026
+          DJANGO_SECURE_SSL_REDIRECT: 'true'
+          DJANGO_COOKIE_SECURE: 'true'
+          DJANGO_HSTS_SECONDS: '31536000'
   frontend:
     runs-on: ubuntu-latest
     steps:
