@@ -21,6 +21,7 @@ import './plans.css'
 import './documents.css'
 import './quote-files.css'
 import './error-boundary.css'
+import './public-layout.css'
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
 
