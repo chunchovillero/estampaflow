@@ -1,0 +1,62 @@
+.error-boundary {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 15% 20%, #e2deff 0, transparent 32%),
+    radial-gradient(circle at 85% 80%, #d8f7fa 0, transparent 28%),
+    var(--surface);
+}
+
+.error-boundary__card {
+  width: min(520px, 100%);
+  padding: clamp(2rem, 6vw, 3.5rem);
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 24px 70px #3329871c;
+}
+
+.error-boundary__logo {
+  display: block;
+  width: min(230px, 75%);
+  height: auto;
+  margin: 0 auto 2rem;
+}
+
+.error-boundary__icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1.25rem;
+  color: var(--purple);
+  font-size: 1.7rem;
+  background: #efedff;
+  border-radius: 20px;
+}
+
+.error-boundary h1 {
+  margin-bottom: .75rem;
+  font-size: clamp(1.8rem, 5vw, 2.35rem);
+}
+
+.error-boundary p {
+  max-width: 390px;
+  margin: 0 auto 1.75rem;
+  color: var(--muted);
+}
+
+.error-boundary__actions {
+  display: flex;
+  justify-content: center;
+  gap: .75rem;
+}
+
+@media (max-width: 420px) {
+  .error-boundary__actions {
+    flex-direction: column;
+  }
+}
