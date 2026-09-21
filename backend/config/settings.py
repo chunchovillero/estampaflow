@@ -85,4 +85,17 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"public_order": "20/hour"},
 }
 SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(minutes=15), "REFRESH_TOKEN_LIFETIME": timedelta(days=7), "ROTATE_REFRESH_TOKENS": True, "BLACKLIST_AFTER_ROTATION": False}
-SPECTACULAR_SETTINGS = {"TITLE": "EstampaFlow API", "DESCRIPTION": "API multiempresa de EstampaFlow. La autenticación privada usa JWT en cookies HttpOnly y CSRF para escrituras.", "VERSION": "1.0.0", "SERVE_INCLUDE_SCHEMA": False, "COMPONENT_SPLIT_REQUEST": True}
+SPECTACULAR_SETTINGS = {
+    "TITLE": "EstampaFlow API",
+    "DESCRIPTION": "API multiempresa de EstampaFlow. La autenticación privada usa JWT en cookies HttpOnly y CSRF para escrituras.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "ENUM_NAME_OVERRIDES": {
+        "BusinessStatusEnum": ["pending", "active", "suspended", "rejected"],
+        "SubscriptionStatusEnum": ["active", "trial", "suspended", "cancelled"],
+        "OrderStatusEnum": [("new", "Nuevo"), ("waiting_design", "Esperando diseño"), ("waiting_approval", "Esperando aprobación"), ("changes_requested", "Cambios solicitados"), ("approved", "Aprobado"), ("production", "En producción"), ("ready", "Listo"), ("delivered", "Entregado"), ("cancelled", "Cancelado")],
+        "QuoteRequestStatusEnum": ["open", "proposals", "accepted", "closed", "cancelled"],
+        "QuoteProposalStatusEnum": ["draft", "sent", "viewed", "accepted", "rejected", "expired", "withdrawn"],
+    },
+}
