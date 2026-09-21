@@ -164,9 +164,14 @@ docker compose run --rm backend python manage.py makemigrations --check --dry-ru
 # Datos de demostración
 docker compose run --rm backend python manage.py seed_demo
 
+# Volumen personalizado (cantidades por empresa, excepto cotizaciones)
+docker compose run --rm backend python manage.py seed_demo --customers 50 --products 30 --orders 100 --quotes 40
+
 # Compilar frontend
 docker compose run --rm frontend npm run build
 ```
+
+El comando es repetible: conserva los registros demo identificables y completa los que falten. Por defecto crea 90 clientes, 54 productos, 180 pedidos y 20 solicitudes de cotización distribuidos entre tres empresas.
 
 GitHub Actions ejecuta migraciones, las pruebas del backend, la validación de OpenAPI, ESLint y la compilación del frontend en cada push a `main` y en cada pull request. Swagger documenta la cookie HttpOnly `access_token` como `cookieJWT` y el encabezado CSRF requerido para escrituras.
 
