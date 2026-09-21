@@ -169,6 +169,22 @@ docker compose run --rm frontend npm run build
 
 GitHub Actions ejecuta migraciones, las pruebas del backend, la validación de OpenAPI y la compilación del frontend en cada push a `main` y en cada pull request. Swagger documenta la cookie HttpOnly `access_token` como `cookieJWT` y el encabezado CSRF requerido para escrituras.
 
+## Respaldos locales
+
+El script de respaldo crea un archivo PostgreSQL en formato personalizado, comprueba que no esté vacío y conserva los 14 respaldos más recientes por defecto:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup.ps1
+```
+
+Para revisar un respaldo sin restaurarlo, usa `pg_restore --list`. La restauración reemplaza la base actual, detiene temporalmente el backend y exige el indicador explícito `-ConfirmRestore`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -BackupFile .\backups\estampaflow-AAAAMMDD-HHMMSS.dump -ConfirmRestore
+```
+
+Los archivos de `backups/` quedan fuera de Git. En producción deben copiarse además a almacenamiento externo y probarse periódicamente en una base separada.
+
 ## Ejecución en producción
 
 El archivo `docker-compose.prod.yml` usa Gunicorn para Django y Nginx para servir el frontend compilado y los estáticos. La API queda accesible bajo el mismo dominio en `/api/`, evitando configuraciones CORS adicionales. El ejemplo exige almacenamiento S3 privado para mantener las descargas protegidas mediante URLs firmadas.

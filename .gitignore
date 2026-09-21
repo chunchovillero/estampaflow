@@ -9,6 +9,7 @@ backend/media/
 backend/staticfiles/
 frontend/node_modules/
 frontend/dist/
+backups/
 *.tsbuildinfo
 .idea/
 .vscode/
