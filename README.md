@@ -185,6 +185,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\restore.ps1 -Backu
 
 Los archivos de `backups/` quedan fuera de Git. En producción deben copiarse además a almacenamiento externo y probarse periódicamente en una base separada.
 
+## Comprobación rápida local
+
+Con los contenedores iniciados, el smoke test comprueba sin modificar datos el frontend, PostgreSQL, API, territorios, marketplace, OpenAPI y Swagger:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke.ps1
+```
+
+También admite `-ApiUrl` y `-FrontendUrl` para comprobar otro entorno cuando exista staging.
+
 ## Ejecución en producción
 
 El archivo `docker-compose.prod.yml` usa Gunicorn para Django y Nginx para servir el frontend compilado y los estáticos. La API queda accesible bajo el mismo dominio en `/api/`, evitando configuraciones CORS adicionales. El ejemplo exige almacenamiento S3 privado para mantener las descargas protegidas mediante URLs firmadas.
