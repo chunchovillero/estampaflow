@@ -24,7 +24,13 @@ class Customer(TenantModel):
     region = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
-    class Meta: ordering = ("first_name", "last_name")
+    class Meta:
+        ordering = ("first_name", "last_name")
+        indexes = [
+            models.Index(fields=("business", "is_active"), name="customer_business_active_idx"),
+            models.Index(fields=("business", "phone"), name="customer_business_phone_idx"),
+            models.Index(fields=("business", "email"), name="customer_business_email_idx"),
+        ]
     @property
     def full_name(self): return f"{self.first_name} {self.last_name}".strip()
     def __str__(self): return self.full_name
@@ -69,6 +75,10 @@ class Product(TenantModel):
     class Meta:
         ordering = ("name",)
         constraints = [models.UniqueConstraint(fields=("business", "slug"), name="unique_product_slug_per_business")]
+        indexes = [
+            models.Index(fields=("business", "is_active", "is_public"), name="product_tenant_visibility_idx"),
+            models.Index(fields=("is_public", "moderation_status", "is_active", "created_at"), name="product_marketplace_idx"),
+        ]
     def __str__(self): return self.name
 
 class ProductVariant(TenantModel):
@@ -136,6 +146,11 @@ class Order(TenantModel):
     class Meta:
         ordering = ("-created_at",)
         constraints = [models.UniqueConstraint(fields=("business", "number"), name="unique_order_number_per_business")]
+        indexes = [
+            models.Index(fields=("business", "status", "due_date"), name="order_tenant_status_due_idx"),
+            models.Index(fields=("business", "created_at"), name="order_tenant_created_idx"),
+            models.Index(fields=("business", "payment_status"), name="order_tenant_payment_idx"),
+        ]
     @property
     def display_number(self): return f"PED-{self.number:05d}"
 
@@ -229,7 +244,9 @@ class QuoteRequest(models.Model):
     accepted_proposal=models.OneToOneField("QuoteProposal",on_delete=models.PROTECT,null=True,blank=True,related_name="accepted_for")
     created_at=models.DateTimeField(auto_now_add=True)
     updated_at=models.DateTimeField(auto_now=True)
-    class Meta: ordering=("-created_at",)
+    class Meta:
+        ordering=("-created_at",)
+        indexes=[models.Index(fields=("status", "created_at"), name="quote_status_created_idx")]
 
 class QuoteMatch(models.Model):
     request=models.ForeignKey(QuoteRequest,on_delete=models.CASCADE,related_name="matches")
@@ -363,4 +380,6 @@ class Notification(models.Model):
     url=models.CharField(max_length=240,blank=True)
     read_at=models.DateTimeField(null=True,blank=True)
     created_at=models.DateTimeField(auto_now_add=True)
-    class Meta: ordering=("-created_at",)
+    class Meta:
+        ordering=("-created_at",)
+        indexes=[models.Index(fields=("business", "recipient", "read_at", "-created_at"), name="notification_inbox_idx")]
